@@ -132,7 +132,7 @@ export const REGISTRY: MetricDef[] = [
     help: "The single most vet-relevant trend. Log it manually if your tracker doesn't report it.",
   },
   {
-    key: "scratching_seconds",
+    key: "scratching",
     label: "Scratching / Itch",
     dimension: "duration",
     direction: "high_bad",
@@ -149,7 +149,7 @@ export const REGISTRY: MetricDef[] = [
     species: ["dog"],
   },
   {
-    key: "wear_hours",
+    key: "wear_time",
     label: "Collar Wear Time",
     dimension: "duration",
     direction: "low_bad",

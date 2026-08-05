@@ -79,12 +79,17 @@ Early. The analysis core is built and tested; the web app is being ported.
 - [x] Timezone/DST-correct day boundaries
 - [x] Canonical SI storage with metric/imperial display
 - [x] Source adapter interface
-- [x] Test suite
-- [ ] Schema migrations
-- [ ] Source adapters: CSV, EU Data Act, Tractive
-- [ ] Resumable history importer
+- [x] Versioned, atomic schema migrations
+- [x] Encrypted credential storage (AES-256-GCM)
+- [x] Resumable history importer
+- [x] CSV source (import + export format)
+- [x] Tractive payload mapping (pure, fixture-testable)
+- [x] Test suite — 95 tests
+- [x] [Setup guide](docs/SETUP.md) for a non-technical installer
+- [ ] Tractive network client + the acknowledgement gate
+- [ ] EU Data Act importer
 - [ ] Web dashboard, trends, vet report
-- [ ] One-click deploy + browser setup
+- [ ] One-click deploy button
 - [ ] `/status` self-diagnosis page
 
 ## Development

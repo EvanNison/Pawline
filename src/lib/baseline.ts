@@ -123,7 +123,10 @@ export function detectDeviation(
   for (const p of series) {
     const d = dayNum(p.date);
     if (d >= detectionStart) recent.push(p);
-    else if (d > historyStart) history.push(p.value);
+    // Inclusive: `>` made the baseline 59 days wide, not the documented
+    // BASELINE_WINDOW of 60, and disagreed with rollingBaseline — so a chart
+    // could draw a band while alerting still thought it lacked enough history.
+    else if (d >= historyStart) history.push(p.value);
   }
   if (history.length < MIN_BASELINE_DAYS) return null;
 

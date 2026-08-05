@@ -1,0 +1,16 @@
+{
+  "name": "pawline",
+  "version": "0.1.0",
+  "private": false,
+  "license": "MIT",
+  "description": "Long-term health trends and baseline alerts for pet activity trackers.",
+  "scripts": {
+    "test": "tsx --test src/lib/__tests__/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.23.8",
+    "typescript": "^5"
+  }
+}

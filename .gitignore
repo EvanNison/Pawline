@@ -1,0 +1,18 @@
+/node_modules
+/.next/
+/out/
+/build
+/coverage
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
+*.pem
+npm-debug.log*
+yarn-error.log*
+
+# Secrets. The negation MUST stay: a bare `.env*` also swallows .env.example,
+# which is the one env file that has to ship.
+.env*
+!.env.example
+
+.vercel

@@ -120,3 +120,24 @@ test("rollingBaseline excludes the detection window from its own baseline", () =
   const last = bands[bands.length - 1]!;
   assert.ok(last.median < 70, `baseline absorbed the spike: median=${last.median}`);
 });
+
+test("the baseline window is BASELINE_WINDOW calendar days, inclusive", () => {
+  // The exact off-by-one that shipped in the predecessor: an exclusive lower
+  // bound made the window 59 days instead of 60, so a metric with just enough
+  // history stayed silent. Pawline had the fix but nothing guarding it.
+  const anchor = 100;
+  const pts: DayPoint[] = Array.from({ length: 21 }, (_, i) => ({
+    date: day(anchor - 62 + i),
+    value: 62 + JITTER[i % 5],
+  }));
+  pts.push({ date: day(anchor - 1), value: 200 }, { date: day(anchor), value: 200 });
+  assert.ok(
+    detectDeviation(pts, "resting_heart_rate", "high_bad"),
+    "the reading exactly BASELINE_WINDOW + DETECTION_WINDOW - 1 days back must count"
+  );
+  assert.equal(
+    detectDeviation(pts.slice(1), "resting_heart_rate", "high_bad"),
+    null,
+    "one day fewer is not enough history"
+  );
+});

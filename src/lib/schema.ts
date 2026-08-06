@@ -134,9 +134,18 @@ export const MIGRATIONS: Migration[] = [
 
 export const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0;
 
-/** Migrations that still need to run, given the database's current version. */
-export function pendingMigrations(currentVersion: number): Migration[] {
-  return MIGRATIONS.filter((m) => m.version > currentVersion).sort((a, b) => a.version - b.version);
+/**
+ * Migrations that still need to run, given the database's current version.
+ *
+ * Sorted defensively: applying 002 before 001 would fail against a fresh
+ * database in a way nobody tests by hand, and source order is not a guarantee.
+ * Takes the list as a parameter so that guarantee can actually be tested.
+ */
+export function pendingMigrations(
+  currentVersion: number,
+  migrations: Migration[] = MIGRATIONS
+): Migration[] {
+  return migrations.filter((m) => m.version > currentVersion).sort((a, b) => a.version - b.version);
 }
 
 /** Structural invariants — asserted by tests, not at runtime. */

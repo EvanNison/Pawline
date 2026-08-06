@@ -130,3 +130,16 @@ test("schema records what a status page needs", () => {
   assert.match(sql, /ciphertext/, "credentials must be stored encrypted");
   assert.doesNotMatch(sql, /weight_lb|distance_mi/, "no unit baked into a column name");
 });
+
+test("pending migrations are ordered even when the source list is not", () => {
+  // Applying 2 before 1 fails on a fresh database — the one case nobody tests
+  // by hand, because every existing database already has 1.
+  const scrambled: typeof MIGRATIONS = [
+    { version: 3, name: "c", statements: ["c"] },
+    { version: 1, name: "a", statements: ["a"] },
+    { version: 2, name: "b", statements: ["b"] },
+  ];
+  assert.deepEqual(pendingMigrations(0, scrambled).map((m) => m.version), [1, 2, 3]);
+  assert.deepEqual(pendingMigrations(1, scrambled).map((m) => m.version), [2, 3]);
+  assert.deepEqual(pendingMigrations(3, scrambled), []);
+});

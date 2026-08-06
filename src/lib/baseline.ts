@@ -35,6 +35,8 @@ export interface Baseline {
   median: number;
   smad: number;
   count: number;
+  /** Kept so spreadOf() can fall back when sMAD is zero. */
+  values?: number[];
 }
 
 function median(xs: number[]): number {
@@ -47,15 +49,45 @@ export function computeBaseline(values: number[]): Baseline | null {
   if (values.length < 2) return null;
   const med = median(values);
   const smad = 1.4826 * median(values.map((v) => Math.abs(v - med)));
-  return { median: med, smad, count: values.length };
+  return { median: med, smad, count: values.length, values };
 }
 
 /**
- * A constant history gives sMAD 0, which would make every subsequent reading
- * infinitely deviant. Fall back to 10% of the median as the spread floor.
+ * Robust scale estimate for the baseline.
+ *
+ * Scaled MAD is the first choice, but it is zero whenever at least half the
+ * readings sit exactly on the median — routine for a tracker that reports whole
+ * numbers. The old fallback of "10% of the median" then produced a band of
+ * plus/minus 30%: a resting heart rate whose history is a flat 60 accepted
+ * anything from 42 to 78, so a sustained rise to 75 raised nothing at all. A
+ * missed alert is the one failure this whole app exists to prevent.
+ *
+ * So: fall back to the *mean* absolute deviation, which is non-zero whenever
+ * any reading differs at all, scaled to be comparable to a standard deviation
+ * (E|X-mu| = sigma*sqrt(2/pi) for a normal, hence the 1.2533). Only a genuinely
+ * constant history reaches the final floor, and that floor is small — if a
+ * value has not moved in sixty days, any movement is worth noticing.
  */
-function spreadOf(base: Baseline): number {
-  return base.smad > 0 ? base.smad : Math.abs(base.median) * 0.1 || 1;
+const MEAN_AD_TO_SIGMA = 1.2533;
+/**
+ * Last-resort spread for a perfectly constant history, as a fraction of it.
+ *
+ * A flat history means the reporting resolution exceeds the day-to-day
+ * biological variation, so the data cannot tell us the spread and we must
+ * assume one. 4% stands in for a plausible day-to-day sigma — about 2.5 bpm on
+ * a 62 bpm resting heart rate — which puts the three-sigma band at roughly
+ * plus/minus 12%. That tolerates rounding wobble while still catching the
+ * sustained 25% rise the old 10% floor let through.
+ */
+const CONSTANT_HISTORY_FLOOR = 0.04;
+
+export function spreadOf(base: Baseline, values?: number[]): number {
+  if (base.smad > 0) return base.smad;
+  if (values && values.length > 0) {
+    const meanAD = values.reduce((s, v) => s + Math.abs(v - base.median), 0) / values.length;
+    if (meanAD > 0) return MEAN_AD_TO_SIGMA * meanAD;
+  }
+  return Math.abs(base.median) * CONSTANT_HISTORY_FLOOR || 1;
 }
 
 export interface Band {
@@ -64,7 +96,7 @@ export interface Band {
 }
 
 export function band(base: Baseline): Band {
-  const s = spreadOf(base);
+  const s = spreadOf(base, base.values);
   return { low: base.median - SIGMA * s, high: base.median + SIGMA * s };
 }
 
@@ -132,7 +164,7 @@ export function detectDeviation(
 
   const base = computeBaseline(history);
   if (!base) return null;
-  const spread = spreadOf(base);
+  const spread = spreadOf(base, history);
   const { low, high } = band(base);
 
   const sides: ("high" | "low")[] =

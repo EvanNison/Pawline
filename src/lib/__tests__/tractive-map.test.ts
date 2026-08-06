@@ -26,7 +26,7 @@ test("every metric an adapter emits exists in the registry", () => {
     }, PET, DATE, FULL_DAY),
     ...mapDayOverview("scratch", { secondsScratch: 120, events: { noData: [] } }, PET, DATE, FULL_DAY),
     ...mapDayOverview("bark", { average: 12 }, PET, DATE, FULL_DAY),
-    ...mapProfileWeight({ details: { weight: 14515 } }, PET, DATE),
+    ...mapProfileWeight({ details: { weight: 14515 } }, PET, DATE, DATE),
   ];
   assert.ok(readings.length > 0);
   for (const r of readings) {
@@ -106,10 +106,55 @@ test("the top-level average is not written twice when the lookback covers today"
 });
 
 test("profile weight is grams, the canonical mass unit", () => {
-  const out = mapProfileWeight({ details: { weight: 14515 } }, PET, DATE);
+  const out = mapProfileWeight({ details: { weight: 14515 } }, PET, DATE, DATE);
   assert.deepEqual(out, [{ petKey: PET, date: DATE, metric: "weight", value: 14515 }]);
-  assert.deepEqual(mapProfileWeight({ details: { weight: 0 } }, PET, DATE), [], "zero is not a weight");
-  assert.deepEqual(mapProfileWeight({}, PET, DATE), []);
+  assert.deepEqual(mapProfileWeight({ details: { weight: 0 } }, PET, DATE, DATE), [], "zero is not a weight");
+  assert.deepEqual(mapProfileWeight({}, PET, DATE, DATE), []);
+});
+
+test("profile weight is never attributed to a past day", () => {
+  // The profile is undated — it is whatever the owner last typed in. A
+  // backwards history import that stamped it on every day it walked would
+  // fabricate a flat weight history for the metric a vet reads first.
+  assert.deepEqual(
+    mapProfileWeight({ details: { weight: 14515 } }, PET, "2025-03-01", DATE),
+    [],
+    "a historical date must produce nothing"
+  );
+});
+
+test("absent wear data is unknown wear, not perfect wear", () => {
+  // A scratch payload with no noData list used to certify a full day of wear —
+  // on the strength of missing information, for the metric every other metric
+  // is judged against.
+  const noEvents = mapDayOverview("scratch", { secondsScratch: 120 }, PET, DATE, FULL_DAY);
+  assert.equal(noEvents.find((r) => r.metric === "wear_time"), undefined);
+  assert.ok(noEvents.find((r) => r.metric === "scratching"), "the scratch reading itself still lands");
+
+  // An explicit empty list DOES mean a full day with no gaps.
+  const explicit = mapDayOverview("scratch", { secondsScratch: 120, events: { noData: [] } }, PET, DATE, FULL_DAY);
+  assert.equal(explicit.find((r) => r.metric === "wear_time")?.value, 24 * 60);
+});
+
+test("corrupt gap durations cannot create more wear than the day holds", () => {
+  assert.equal(wearMinutes([{ durationSeconds: -99999 }], FULL_DAY), 24 * 60);
+  assert.equal(wearMinutes([{ durationSeconds: -3600 }, { durationSeconds: 7200 }], FULL_DAY), 22 * 60);
+});
+
+test("a null day-zero lookback does not discard the top-level average", () => {
+  const out = mapBiometric(
+    { average: 62, lookback: { days: [{ dayOffset: 0, average: null }] } },
+    "resting_heart_rate", PET, DATE, addDays
+  );
+  assert.equal(out.length, 1, "the usable top-level average must still be recorded");
+  assert.deepEqual(out[0], { petKey: PET, date: DATE, metric: "resting_heart_rate", value: 62 });
+});
+
+test("capabilities only advertise metrics a mapper can emit", () => {
+  // An advertised metric with no source shows an always-empty chart, which
+  // reads as "the dog did not move" rather than "not measured".
+  const caps = capabilitiesToMetrics(["VITALITY_TRACKING", "SLEEP_TRACKING", "BARK_DETECTION", "SCRATCH_DETECTION"]);
+  assert.ok(!caps.includes("distance"), "nothing in this adapter produces distance yet");
 });
 
 test("capabilities gate which metrics a tracker claims", () => {

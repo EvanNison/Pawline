@@ -31,6 +31,12 @@ export interface ImportJob {
   /** Newest date found to contain data. */
   latestDate: string | null;
   daysDone: number;
+  /**
+   * Days that actually contained readings, as opposed to days merely probed.
+   * "Imported 10 days" for five days of data and five empty probes overstates
+   * what the user got.
+   */
+  daysWithData: number;
   /** Consecutive empty days seen so far — the "we've reached the start" signal. */
   emptyStreak: number;
   lastError: string | null;
@@ -76,15 +82,29 @@ export function startJob(petId: string, sourceId: string, from: string): ImportJ
     earliestDate: null,
     latestDate: null,
     daysDone: 0,
+    daysWithData: 0,
     emptyStreak: 0,
     lastError: null,
     finishedReason: null,
   };
 }
 
-/** True when the job stopped early rather than exhausting the pet's history. */
+/**
+ * True when the job stopped without establishing that it reached the start.
+ *
+ * A `floorDate` stop is NOT truncation: that bound is the pet's date of birth,
+ * so there is nothing older to find. A day-ceiling stop, or a long empty run
+ * that might be a collar-off gap rather than the beginning, both are.
+ */
 export function wasTruncated(job: ImportJob): boolean {
-  return job.state === "done" && /limit|earliest allowed/.test(job.finishedReason ?? "");
+  if (job.state !== "done") return false;
+  const reason = job.finishedReason ?? "";
+  // A floorDate stop is not truncation: that bound is the pet's date of birth,
+  // so there is nothing older to find. An empty-streak stop is usually the real
+  // start of history — flagging every completed import as incomplete would make
+  // the warning meaningless — so only the hard day ceiling counts, and the
+  // summary states the empty-streak ambiguity in words instead.
+  return /-day limit/.test(reason);
 }
 
 export interface ChunkPlan {
@@ -104,7 +124,13 @@ export function planChunk(job: ImportJob, opts: ImportOptions = DEFAULT_IMPORT_O
   if (!job.cursorDate) return { dates: [], finished: true, reason: "no start date" };
 
   if (job.emptyStreak >= opts.emptyStreakLimit) {
-    return { dates: [], finished: true, reason: `reached the start of this pet's history` };
+    // This heuristic cannot tell the start of history from a long stretch with
+    // the collar off. Say so, rather than reporting complete coverage.
+    return {
+      dates: [],
+      finished: true,
+      reason: `found no data for ${opts.emptyStreakLimit} days running — either the start of this pet's history, or a long gap`,
+    };
   }
   if (job.daysDone >= opts.maxDays) {
     return { dates: [], finished: true, reason: `stopped at the ${opts.maxDays}-day limit` };
@@ -146,31 +172,46 @@ export function applyChunk(
   opts: ImportOptions = DEFAULT_IMPORT_OPTIONS
 ): ImportJob {
   const withData = new Set(result.datesWithData);
-  const processed = [...result.datesWithData, ...result.emptyDates];
+  const processed = new Set([...result.datesWithData, ...result.emptyDates]);
 
-  // Recompute the empty streak by walking the planned dates newest-to-oldest,
-  // rather than trusting a counter: a chunk that found data resets it, and a
-  // chunk that failed partway must only count what it actually saw.
-  let emptyStreak = job.emptyStreak;
+  // Walk the plan newest-to-oldest and stop at the first date the result does
+  // not account for. A result that skips a date in the middle — reporting
+  // Aug 10, 8, 7 but not 9, with no error — would otherwise advance the cursor
+  // past Aug 9 and lose it permanently.
+  const covered: string[] = [];
   for (const date of plan.dates) {
-    if (!processed.includes(date)) break; // not reached before the error
+    if (!processed.has(date)) break;
+    covered.push(date);
+  }
+
+  // Replay guard. `applyChunk` may be re-run against an already-updated job
+  // after a crash between the fetch and the write; counting blindly turned a
+  // five-day chunk into ten and let the day ceiling arrive with dates
+  // unfetched. The cursor is the source of truth for what has been consumed.
+  const alreadyPast =
+    job.cursorDate !== null && covered.length > 0 && job.cursorDate < covered[covered.length - 1];
+  if (alreadyPast) return job;
+
+  let emptyStreak = job.emptyStreak;
+  for (const date of covered) {
     if (withData.has(date)) emptyStreak = 0;
     else emptyStreak++;
   }
 
-  const dated = [...withData].sort();
+  const dated = [...withData].filter((d) => covered.includes(d)).sort();
   const earliest = dated[0];
   const latest = dated[dated.length - 1];
+  const oldestCovered = covered[covered.length - 1];
 
-  const oldestProcessed = processed.sort()[0];
   const next: ImportJob = {
     ...job,
     state: result.error ? "failed" : "running",
-    cursorDate: oldestProcessed ? addDays(oldestProcessed, -1) : job.cursorDate,
+    cursorDate: oldestCovered ? addDays(oldestCovered, -1) : job.cursorDate,
     earliestDate:
       earliest && (!job.earliestDate || earliest < job.earliestDate) ? earliest : job.earliestDate,
     latestDate: latest && (!job.latestDate || latest > job.latestDate) ? latest : job.latestDate,
-    daysDone: job.daysDone + processed.length,
+    daysDone: job.daysDone + covered.length,
+    daysWithData: job.daysWithData + dated.length,
     emptyStreak,
     lastError: result.error ?? null,
   };
@@ -184,6 +225,8 @@ export function applyChunk(
 
 export interface Progress {
   daysDone: number;
+  /** Days that held readings, which is what "imported" should mean. */
+  daysWithData: number;
   /** 0-1, or null when the span is not yet known. */
   fraction: number | null;
   /** One line for a non-technical user. */
@@ -199,12 +242,12 @@ export function progressOf(job: ImportJob, opts: ImportOptions = DEFAULT_IMPORT_
   const summary =
     job.state === "done"
       ? wasTruncated(job)
-        ? `Stopped early after ${job.daysDone} days${span} — ${job.finishedReason}. There may be older data still to import.`
-        : `Finished — imported ${job.daysDone} days${span}.`
+        ? `Stopped after ${job.daysWithData} days of data${span} — ${job.finishedReason}. There may be older data still to import.`
+        : `Finished — ${job.daysWithData} days of data${span}.`
       : job.state === "failed"
         ? `Paused after ${job.daysDone} days: ${job.lastError ?? "unknown error"}. It will resume automatically.`
         : job.state === "cancelled"
           ? `Cancelled after ${job.daysDone} days.`
-          : `Imported ${job.daysDone} days so far${span}…`;
-  return { daysDone: job.daysDone, fraction: job.state === "done" ? 1 : fraction, summary };
+          : `${job.daysWithData} days of data so far${span}…`;
+  return { daysDone: job.daysDone, daysWithData: job.daysWithData, fraction: job.state === "done" ? 1 : fraction, summary };
 }

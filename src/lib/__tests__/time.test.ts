@@ -30,13 +30,28 @@ test("DST transition days are not 24 hours long", () => {
 });
 
 test("day ranges are contiguous with no gap or overlap", () => {
+  // Comparing one range's end with the next range's start is the SAME
+  // expression on both sides and cannot fail. Pin the actual lengths instead.
   let cursor = "2026-03-06";
+  const hours: number[] = [];
   for (let i = 0; i < 5; i++) {
-    const [, end] = dayRangeEpoch(cursor, NY);
-    const next = addDays(cursor, 1);
-    assert.equal(end, dayRangeEpoch(next, NY)[0], `gap after ${cursor}`);
-    cursor = next;
+    const [start, end] = dayRangeEpoch(cursor, NY);
+    assert.ok(end > start, `${cursor} has non-positive length`);
+    hours.push((end - start) / 3600);
+    cursor = addDays(cursor, 1);
   }
+  assert.deepEqual(hours, [24, 24, 23, 24, 24], "exactly one 23-hour day, on the transition");
+});
+
+test("a day whose local midnight is skipped entirely", () => {
+  // Some zones move the clock AT midnight, so 00:00 never happens. Offset
+  // arithmetic oscillated and returned 23:00 on the PREVIOUS date.
+  const tz = "America/Santiago";
+  const [start, end] = dayRangeEpoch("2026-09-06", tz);
+  const local = (e: number) =>
+    new Intl.DateTimeFormat("sv-SE", { timeZone: tz, dateStyle: "short", timeStyle: "short" }).format(new Date(e * 1000));
+  assert.equal(local(start), "2026-09-06 01:00");
+  assert.equal((end - start) / 3600, 23);
 });
 
 test("timezones east of UTC work", () => {

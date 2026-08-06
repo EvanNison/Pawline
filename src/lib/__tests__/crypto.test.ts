@@ -92,3 +92,19 @@ test("mask never reveals a usable secret", () => {
   assert.ok(!masked.includes("uperSecret12"));
   assert.match(masked, /^Su•+23$/);
 });
+
+test("a tampered envelope is rejected even when base64 hides the damage", () => {
+  // Buffer.from silently DISCARDS invalid base64 characters, so inserting a
+  // stray character into the ciphertext text still decoded to the original
+  // bytes and decrypted successfully — making the envelope's "the data was
+  // altered" guarantee untrue.
+  const key = generateKey();
+  return encryptSecret("hunter2", key).then(async (envelope) => {
+    const [v, iv, ct] = envelope.split(".");
+    await assert.rejects(() => decryptSecret(`${v}.${iv}.${ct}!`, key), /not valid base64/);
+    await assert.rejects(() => decryptSecret(`${v}.${iv}!.${ct}`, key), /not valid base64/);
+    await assert.rejects(() => decryptSecret(`${v}.${iv}.${ct.slice(0, 4)} ${ct.slice(4)}`, key), /not valid base64/);
+    // The untampered envelope still works.
+    assert.equal(await decryptSecret(envelope, key), "hunter2");
+  });
+});

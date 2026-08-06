@@ -31,7 +31,9 @@ function push(out: Reading[], petKey: string, date: string, metric: string, valu
  * wear decides whether the day's other totals are trustworthy at all.
  */
 export function wearMinutes(noDataGaps: { durationSeconds?: number }[], daySeconds: number): number {
-  const off = noDataGaps.reduce((sum, g) => sum + (num(g.durationSeconds) ?? 0), 0);
+  // Negative durations are corrupt, not credit: summing them raw produced more
+  // wear than the day contains (1500 minutes of a 1440-minute day).
+  const off = noDataGaps.reduce((sum, g) => sum + Math.max(0, num(g.durationSeconds) ?? 0), 0);
   const worn = Math.max(0, daySeconds - Math.min(off, daySeconds));
   return Math.round((worn / 60) * 10) / 10;
 }
@@ -77,10 +79,15 @@ export function mapDayOverview(
     const seconds = num(payload.secondsScratch);
     push(out, petKey, date, "scratching", seconds === null ? null : seconds / 60);
 
-    const gaps = ((payload.events as Record<string, unknown> | undefined)?.noData ?? []) as {
-      durationSeconds?: number;
-    }[];
-    push(out, petKey, date, "wear_time", wearMinutes(gaps, daySeconds));
+    // Wear is derived from the gaps the tracker reported. If it reported no
+    // gap list at all, that is missing information — emitting a full day would
+    // certify perfect wear on the strength of absent data, and wear is the
+    // metric everything else is judged against.
+    const events = payload.events as Record<string, unknown> | undefined;
+    const gaps = Array.isArray(events?.noData)
+      ? (events.noData as { durationSeconds?: number }[])
+      : null;
+    if (gaps) push(out, petKey, date, "wear_time", wearMinutes(gaps, daySeconds));
   }
 
   if (kind === "bark") {
@@ -114,20 +121,31 @@ export function mapBiometric(
     // dayOffset is relative to the requested date and is zero or negative.
     if (v !== null) out.push({ petKey, date: shift(date, d.dayOffset), metric, value: v });
   }
-  // Only fall back to the top-level average when the lookback did not already
-  // cover the requested day, or the day would be written twice.
-  if (!days.some((d) => d.dayOffset === 0)) {
+  // Fall back when the lookback did not produce a USABLE value for the
+  // requested day. Testing only for the presence of offset zero discarded a
+  // perfectly good top-level average whenever that entry existed but was null.
+  if (!out.some((r) => r.date === date)) {
     push(out, petKey, date, metric, num(payload.average));
   }
   return out;
 }
 
-/** Profile weight, reported in grams — already the canonical unit for mass. */
+/**
+ * Profile weight, reported in grams — already the canonical unit for mass.
+ *
+ * The profile carries no date: it is whatever the owner last typed in. It may
+ * therefore only be attributed to the current day. Letting the caller supply
+ * any date meant a backwards history import could stamp today's weight onto
+ * every day it walked, fabricating a flat weight history — for the metric a vet
+ * looks at first.
+ */
 export function mapProfileWeight(
   details: Record<string, unknown>,
   petKey: string,
-  date: string
+  date: string,
+  today: string
 ): Reading[] {
+  if (date !== today) return [];
   const grams = num((details.details as Record<string, unknown> | undefined)?.weight);
   if (grams === null || grams <= 0) return [];
   return [{ petKey, date, metric: "weight", value: grams }];
@@ -140,7 +158,10 @@ export function mapProfileWeight(
  */
 export function capabilitiesToMetrics(caps: string[]): string[] {
   const has = (c: string) => caps.includes(c);
-  const out = ["active_minutes", "rest_minutes", "calories", "distance", "weight"];
+  // Only metrics some mapper in this adapter can actually produce. "distance"
+  // was advertised while nothing emitted it, so a consumer would show an
+  // always-empty Distance chart — which reads as "the dog did not move".
+  const out = ["active_minutes", "rest_minutes", "calories", "weight"];
   if (has("VITALITY_TRACKING")) out.push("resting_heart_rate", "resting_respiratory_rate");
   if (has("SLEEP_TRACKING"))
     out.push("sleep_score", "night_sleep_minutes", "day_sleep_minutes", "calm_minutes", "sleep_interruptions");

@@ -46,7 +46,7 @@ test("resumes exactly where the previous chunk stopped, with no gap or overlap",
 test("stops after a run of empty days and reports why", () => {
   // Data exists only from 2026-08-06 onwards.
   const { fetched, job } = runToCompletion(startJob("p", "csv", "2026-08-10"), (d) => d >= "2026-08-06");
-  assert.match(job.finishedReason!, /reached the start/);
+  assert.match(job.finishedReason!, /start of this pet's history, or a long gap/);
   assert.equal(job.state, "done");
   assert.equal(job.earliestDate, "2026-08-06");
   assert.equal(job.latestDate, "2026-08-10");
@@ -78,7 +78,7 @@ test("the streak only ends the job when nothing further is found", () => {
   const { job } = runToCompletion(startJob("p", "csv", "2026-08-10"), hasData, OPTS);
   assert.equal(job.state, "done");
   assert.equal(job.earliestDate, "2026-08-08");
-  assert.match(job.finishedReason!, /reached the start/);
+  assert.match(job.finishedReason!, /start of this pet's history, or a long gap/);
   assert.equal(wasTruncated(job), false, "reaching the true start is not truncation");
 });
 
@@ -101,7 +101,7 @@ test("respects the maxDays ceiling", () => {
   assert.equal(job.daysDone, OPTS.maxDays);
   assert.match(job.finishedReason!, /40-day limit/);
   assert.equal(wasTruncated(job), true, "a cap must be reported, never silent");
-  assert.match(progressOf(job, OPTS).summary, /Stopped early.*older data still to import/);
+  assert.match(progressOf(job, OPTS).summary, /Stopped.*older data still to import/);
 });
 
 test("never walks earlier than floorDate", () => {
@@ -147,10 +147,10 @@ test("a cancelled job stops immediately", () => {
 
 test("progress messages are plain English at every state", () => {
   const base = startJob("p", "csv", "2026-08-10");
-  assert.match(progressOf(base, OPTS).summary, /Imported 0 days so far/);
+  assert.match(progressOf(base, OPTS).summary, /0 days of data so far/);
   assert.match(
-    progressOf({ ...base, state: "done", daysDone: 700, finishedReason: "reached the start of this pet's history" }, OPTS).summary,
-    /Finished — imported 700 days/
+    progressOf({ ...base, state: "done", daysDone: 700, finishedReason: "start of history" }, OPTS).summary,
+    /Finished — 0 days of data/
   );
   assert.match(
     progressOf({ ...base, state: "failed", daysDone: 12, lastError: "login failed" }, OPTS).summary,
@@ -177,4 +177,59 @@ test("a full multi-year import converges and finds the true span", () => {
   assert.equal(job.latestDate, "2026-08-10");
   // Walks the real span plus one streak-limit of empties to confirm the start.
   assert.ok(fetched.length < 740 + 40, `fetched ${fetched.length}`);
+});
+
+test("re-applying a chunk after a crash does not double-count", () => {
+  // applyChunk may be re-run against an ALREADY-updated job if the process died
+  // between fetching and writing. Counting blindly turned a five-day chunk into
+  // ten, so the day ceiling arrived with dates still unfetched. (Asserting
+  // applyChunk(job,...) twice from the SAME original job only proves purity.)
+  const job = startJob("p", "csv", "2026-08-10");
+  const plan = planChunk(job, OPTS);
+  const result = { datesWithData: plan.dates, emptyDates: [] };
+  const once = applyChunk(job, plan, result, OPTS);
+  const replayed = applyChunk(once, plan, result, OPTS);
+  assert.equal(replayed.daysDone, once.daysDone, "a replayed chunk must not advance the count");
+  assert.equal(replayed.cursorDate, once.cursorDate);
+});
+
+test("a result that skips a date does not step over it", () => {
+  // Plan Aug 10..6; the result omits Aug 8 without reporting an error. The
+  // cursor must stop at the gap rather than resuming below it and losing Aug 8.
+  const job = startJob("p", "csv", "2026-08-10");
+  const plan = planChunk(job, OPTS);
+  const after = applyChunk(
+    job,
+    plan,
+    { datesWithData: ["2026-08-10", "2026-08-09"], emptyDates: ["2026-08-07", "2026-08-06"] },
+    OPTS
+  );
+  assert.equal(after.daysDone, 2, "only the contiguous prefix counts");
+  assert.equal(planChunk(after, OPTS).dates[0], "2026-08-08", "the skipped day is retried");
+});
+
+test("progress reports days of data, not days probed", () => {
+  const job = startJob("p", "csv", "2026-08-10");
+  const plan = planChunk(job, OPTS);
+  const after = applyChunk(
+    job,
+    plan,
+    { datesWithData: ["2026-08-10", "2026-08-09"], emptyDates: ["2026-08-08", "2026-08-07", "2026-08-06"] },
+    OPTS
+  );
+  assert.equal(after.daysDone, 5, "five days were probed");
+  assert.equal(after.daysWithData, 2, "two held data");
+  assert.match(progressOf(after, OPTS).summary, /2 days of data/);
+});
+
+test("a birth-date floor is not reported as truncation", () => {
+  const opts = { ...OPTS, floorDate: "2026-08-08" };
+  const { job } = runToCompletion(startJob("p", "csv", "2026-08-10"), () => true, opts);
+  assert.equal(job.state, "done");
+  assert.equal(wasTruncated(job), false, "there is nothing older than the pet");
+});
+
+test("the day ceiling IS reported as truncation", () => {
+  const { job } = runToCompletion(startJob("p", "csv", "2026-08-10"), () => true, OPTS);
+  assert.equal(wasTruncated(job), true);
 });

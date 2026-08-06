@@ -55,8 +55,12 @@ const DISPLAY: Record<Dimension, Record<UnitSystem, Display>> = {
     imperial: { unit: "mi", from: (v) => v / 1609.344, to: (v) => v * 1609.344, decimals: 2 },
   },
   duration: {
-    metric: { unit: "min", from: IDENTITY, to: IDENTITY, decimals: 0 },
-    imperial: { unit: "min", from: IDENTITY, to: IDENTITY, decimals: 0 },
+    // One decimal, not zero. Durations range from hours of sleep down to a
+    // couple of minutes of scratching; rounding to whole minutes displayed 20
+    // seconds of scratching as "0 min" and 30 seconds as "1 min" — a health
+    // number shown as nothing, or as double what it was.
+    metric: { unit: "min", from: IDENTITY, to: IDENTITY, decimals: 1 },
+    imperial: { unit: "min", from: IDENTITY, to: IDENTITY, decimals: 1 },
   },
   rate: {
     metric: { unit: "/min", from: IDENTITY, to: IDENTITY, decimals: 0 },

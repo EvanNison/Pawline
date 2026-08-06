@@ -118,7 +118,15 @@ test("rollingBaseline excludes the detection window from its own baseline", () =
   const series = [...steadyHistory(62, 80), ...Array.from({ length: 3 }, (_, i) => ({ date: day(80 + i), value: 200 }))];
   const bands = rollingBaseline(series);
   const last = bands[bands.length - 1]!;
-  assert.ok(last.median < 70, `baseline absorbed the spike: median=${last.median}`);
+  // `< 70` was too weak to fail: with only three 200s among sixty readings the
+  // median stays near 62 even when exclusion is broken. Pin it to the actual
+  // undisturbed baseline.
+  assert.ok(
+    Math.abs(last.median - 62) <= 1,
+    `baseline should be the pre-spike normal, got ${last.median}`
+  );
+  // And the spike days must genuinely be outside the window it was built from.
+  assert.equal(last.count, 60, "the three detection-window days are excluded");
 });
 
 test("the baseline window is BASELINE_WINDOW calendar days, inclusive", () => {
@@ -140,4 +148,39 @@ test("the baseline window is BASELINE_WINDOW calendar days, inclusive", () => {
     null,
     "one day fewer is not enough history"
   );
+});
+
+test("a flat history does not produce a band so wide it hides real change", () => {
+  // A tracker reporting whole numbers can sit on one value for weeks, making
+  // MAD exactly zero. A fallback of "10% of the median" then accepted 42-78 bpm
+  // for a dog whose normal is 60, so a sustained rise to 75 raised nothing —
+  // the precise failure this app exists to prevent.
+  const flat: DayPoint[] = Array.from({ length: 60 }, (_, i) => ({ date: day(i), value: 60 }));
+  const risen = [...flat, { date: day(60), value: 75 }, { date: day(61), value: 75 }];
+  assert.ok(detectDeviation(risen, "resting_heart_rate", "both"), "a 25% sustained rise must alert");
+
+  const wobble = [...flat, { date: day(60), value: 61 }, { date: day(61), value: 61 }];
+  assert.equal(detectDeviation(wobble, "resting_heart_rate", "both"), null, "rounding wobble must not");
+
+  const b = computeBaseline(flat.map((p) => p.value))!;
+  assert.equal(b.smad, 0, "precondition: scaled MAD is degenerate here");
+  assert.ok(band(b).high < 68, `band should be tight for a flat history, got ${band(b).high}`);
+});
+
+test("with zero MAD, the band still tracks how spread out the data is", () => {
+  // sMAD is zero whenever at least half the deviations are zero, not only for
+  // perfectly constant data. The fallback must reflect the ACTUAL dispersion —
+  // a fixed percentage floor would give these two identical bands despite one
+  // being far more variable than the other.
+  const tight = Array.from({ length: 60 }, (_, i) => (i < 40 ? 60 : 62));
+  const loose = Array.from({ length: 60 }, (_, i) => (i < 40 ? 60 : 90));
+  const bTight = computeBaseline(tight)!;
+  const bLoose = computeBaseline(loose)!;
+  assert.equal(bTight.smad, 0, "precondition: both are degenerate for MAD");
+  assert.equal(bLoose.smad, 0);
+  assert.equal(bTight.median, bLoose.median, "and share a median, so only spread differs");
+
+  const wTight = band(bTight).high - bTight.median;
+  const wLoose = band(bLoose).high - bLoose.median;
+  assert.ok(wLoose > wTight * 3, `spread must track dispersion: ${wTight} vs ${wLoose}`);
 });

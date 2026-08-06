@@ -33,31 +33,38 @@ export function localDate(tz: string, at: Date = new Date()): string {
   }).format(at);
 }
 
-/** Milliseconds to add to a UTC instant to get wall-clock time in `tz`. */
-function tzOffsetMs(utcMs: number, tz: string): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
+
+/**
+ * Unix seconds at the first instant of local date `date` in `tz`.
+ *
+ * Binary search rather than offset arithmetic. Resolving the offset and
+ * subtracting it assumes local midnight exists — but some zones move their
+ * clocks AT midnight, so 00:00 never happens. America/Santiago's 2026-09-06
+ * jumps 00:00 to 01:00; the two-pass version oscillated and returned 23:00 on
+ * September 5, reporting a 24-hour day that is really 23. A day query then
+ * pulled in an hour of the previous date and overstated wear.
+ *
+ * localDate() is monotonic in time, so the first instant whose local date is
+ * not before the target is exactly the start of that date — 00:00 normally,
+ * and the transition instant when midnight is skipped.
+ */
+export function midnightEpoch(date: string, tz: string): number {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
     timeZone: tz,
-    hour12: false,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).formatToParts(new Date(utcMs));
-  const f: Record<string, number> = {};
-  for (const p of parts) if (p.type !== "literal") f[p.type] = Number(p.value);
-  return Date.UTC(f.year, f.month - 1, f.day, f.hour % 24, f.minute, f.second) - utcMs;
-}
-
-/**
- * Unix seconds at local midnight opening `date` in `tz`. Resolves the offset
- * actually in force on that date, so it stays correct across DST transitions.
- */
-export function midnightEpoch(date: string, tz: string): number {
-  const naive = Date.parse(`${date}T00:00:00Z`);
-  const first = naive - tzOffsetMs(naive, tz);
-  return Math.floor((naive - tzOffsetMs(first, tz)) / 1000);
+  });
+  const naive = Math.floor(Date.parse(`${date}T00:00:00Z`) / 1000);
+  // No real zone is more than 26h from UTC; 36h is a safe bracket.
+  let lo = naive - 36 * 3600;
+  let hi = naive + 36 * 3600;
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (fmt.format(new Date(mid * 1000)) < date) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
 }
 
 /** [start, end) unix seconds covering the whole pet-local day `date`. */

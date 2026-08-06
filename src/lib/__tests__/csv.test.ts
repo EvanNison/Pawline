@@ -51,7 +51,7 @@ test("blank cells mean 'not measured', never zero", () => {
 test("non-numeric values warn rather than becoming NaN", () => {
   const { readings, warnings } = parseCsv("date,resting_heart_rate\n2026-08-01,about sixty");
   assert.equal(readings.length, 0);
-  assert.match(warnings[0].message, /not a number/);
+  assert.match(warnings[0].message, /not a plain number/);
 });
 
 test("invalid and impossible dates are rejected", () => {
@@ -132,4 +132,57 @@ test("CsvSource.fetchDay is idempotent and empty for unknown days", async () => 
 test("CsvSource.check explains an unusable file instead of returning null", async () => {
   const src = new CsvSource("nonsense", { timezone: TZ });
   assert.notEqual(await src.check(), null);
+});
+
+test("a row with the wrong number of cells is refused, not shifted", () => {
+  // The dangerous case: an unquoted thousands separator. Every value after the
+  // extra comma lands in the wrong column, and each one looks plausible.
+  const { readings, warnings } = parseCsv(
+    ["date,weight,resting_heart_rate", "2026-08-01,14,515,62"].join("\n")
+  );
+  assert.equal(readings.length, 0, "must not import 14 g of dog and a heart rate of 515");
+  assert.match(warnings[0].message, /3 values but the header has 3|4 values but the header has 3/);
+  assert.match(warnings[0].message, /unquoted comma/);
+});
+
+test("a quote in the middle of a value is not silently deleted", () => {
+  // `6"2` used to become `62` and be stored as a heart rate.
+  const { readings, warnings } = parseCsv('date,resting_heart_rate\n2026-08-01,6"2');
+  assert.equal(readings.length, 0);
+  assert.match(warnings[0].message, /not a plain number/);
+  // Properly quoted fields still work.
+  assert.equal(parseCsv('date,resting_heart_rate\n2026-08-01,"62"').readings[0].value, 62);
+});
+
+test("only plain decimal numbers are accepted", () => {
+  for (const bad of ["0x3e", "0b111110", "1e2", "Infinity", "  62  x", "62%"]) {
+    const { readings, warnings } = parseCsv(`date,resting_heart_rate\n2026-08-01,${bad}`);
+    assert.equal(readings.length, 0, `"${bad}" must not be accepted`);
+    assert.ok(warnings.length > 0, `"${bad}" must warn`);
+  }
+  // ...and ordinary decimals still are.
+  assert.equal(parseCsv("date,resting_heart_rate\n2026-08-01,62.5").readings[0].value, 62.5);
+  assert.equal(parseCsv("date,resting_heart_rate\n2026-08-01,.5").readings[0].value, 0.5);
+});
+
+test("negative values are refused", () => {
+  const { readings, warnings } = parseCsv("date,weight_lb\n2026-08-01,-1000");
+  assert.equal(readings.length, 0, "a negative weight is a broken export, not a measurement");
+  assert.match(warnings[0].message, /negative/);
+});
+
+test("a blank cell is not measured, and is distinguishable from a real zero", () => {
+  // Also: a blank must be understood as "not recorded", not reported as a
+  // malformed value. Warning on every empty cell would bury the real problems
+  // in a file where most metrics are only recorded some days.
+  // "0 minutes of activity" and "activity not recorded" mean opposite things:
+  // a stored zero would drag the baseline down and could raise a false alert.
+  const { readings } = parseCsv(
+    ["date,active_minutes", "2026-08-01,", "2026-08-02,0", "2026-08-03,90"].join("\n")
+  );
+  assert.equal(readings.length, 2, "the blank row produces no reading at all");
+  assert.deepEqual(readings.map((r) => r.date), ["2026-08-02", "2026-08-03"]);
+  assert.equal(readings[0].value, 0, "an explicit zero IS kept");
+  const { warnings } = parseCsv(["date,active_minutes", "2026-08-01,", "2026-08-02,0"].join("\n"));
+  assert.deepEqual(warnings, [], "a blank is expected input, not an error");
 });

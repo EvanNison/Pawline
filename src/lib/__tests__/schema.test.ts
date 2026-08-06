@@ -127,6 +127,10 @@ test("schema records what a status page needs", () => {
   // failed"; import_jobs is what makes a long backfill resumable.
   assert.match(sql, /create table runs/);
   assert.match(sql, /create table import_jobs/);
+  // Naming the table is not enough: without these columns the reason an import
+  // stopped is lost on the next read, and a capped job looks complete.
+  assert.match(sql, /finished_reason/, "import_jobs must persist why it stopped");
+  assert.match(sql, /days_with_data/, "and how many days actually held data");
   assert.match(sql, /ciphertext/, "credentials must be stored encrypted");
   assert.doesNotMatch(sql, /weight_lb|distance_mi/, "no unit baked into a column name");
 });

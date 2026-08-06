@@ -79,6 +79,17 @@ export async function decryptSecret(envelope: string, keyB64: string): Promise<s
   const [version, ivB64, ctB64] = parts;
   if (version !== VERSION) throw new CryptoError(`unsupported credential format "${version}"`);
 
+  // Validate the envelope's base64 as strictly as the key's. Buffer.from
+  // silently discards invalid characters, so inserting a `!` into the
+  // ciphertext still decrypted successfully — making the envelope-level
+  // "the data was altered" guarantee untrue even though AES-GCM protected the
+  // decoded bytes.
+  for (const [label, part] of [["iv", ivB64], ["ciphertext", ctB64]] as const) {
+    if (!BASE64_RE.test(part.trim())) {
+      throw new CryptoError(`stored credential's ${label} is not valid base64`);
+    }
+  }
+
   const key = await importKey(keyB64);
   try {
     const plain = await crypto.subtle.decrypt(

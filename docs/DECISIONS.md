@@ -80,43 +80,58 @@ strings, where they end up in server logs.
 ## 9. Alert lifecycle invariants — carried over, not re-derived
 
 Pawline has no alerting layer yet. When it gets one, these rules are not
-suggestions: each one cost a round of adversarial review in the predecessor,
-and most were found only after a previous fix had introduced them.
+suggestions: each cost a round of adversarial review in the predecessor, and
+most were found only after a previous fix had introduced them. Several were
+also *wrong as first written here* — corrected below.
 
-**Identity.** An alert is keyed by the date of the *deviation*, never by the day
-it was noticed. Keying on "today" makes one unchanged stale condition produce a
-fresh row, and a fresh email, on every single run.
+**Identity is the episode, not the day.** Keying an alert by the deviation's
+date stops an unchanged *stale* condition being re-raised, but an ongoing one
+moves its date forward daily, so a five-day episode produced five alerts and
+five emails. An open unacknowledged alert for a metric means the episode is
+already running: refresh it in place, keeping the date it started.
 
-**Order.** Raise → notify → withdraw, in that order, in one pass. Withdrawing
+**Order: raise, notify, withdraw — and delivery is at-least-once.** Withdrawing
 before sending deletes a real alert whose email failed yesterday the moment
-today's data looks normal, so it is never reported at all.
+today looks normal. But this cannot be made atomic against an external mail
+service: a crash after sending and before recording it will re-send. Choose
+at-least-once deliberately — a duplicate email is recoverable, a dropped health
+alert is not — and say so, rather than implying exactly-once.
 
-**Withdrawal needs positive evidence.** "No deviation detected" is not evidence
-of recovery: detection also returns nothing when there is too little history, or
-when too few recent readings survive filtering to satisfy the 2-of-3 rule. After
-a gap, a single fresh *and still abnormal* reading produces exactly that. Require
-that current readings actually sit inside the band.
+**Withdrawal needs positive evidence, specified precisely.** "No deviation
+detected" is not evidence: detection also returns nothing when there is too
+little history, or when too few readings survive filtering to satisfy the
+2-of-3 rule. Require instead that *every* reading in the detection window sits
+inside the band, that those readings are wear-valid, and that the data is
+current. Note the residual hazard: a rolling baseline slowly absorbs a long
+episode, so a condition that never resolves can eventually look in-band. If
+that matters, freeze the band at the alert's creation.
 
-**"Delivered" and "resolved" are different facts.** Using one flag for both means
-every fix for one breaks the other. A resolved-but-undelivered alert must vanish
-from the dashboard immediately (claiming a recovered metric is trending is a
+**"Delivered" and "resolved" are different facts.** Using one flag for both
+means every fix for one breaks the other. A resolved-but-undelivered alert must
+leave the dashboard immediately (claiming a recovered metric is trending is a
 false alert) while staying eligible for retry (or the deviation is never
-reported). Two states, not one.
+reported). Two columns, not one.
 
-**Nothing may be both undeliverable and invisible.** Any age ceiling on retries
-strands alerts: they cannot be sent, cannot be withdrawn if withdrawal requires
-delivery, and are hidden for being old. Retry without a date ceiling, display
-anything undelivered at any age, and give up only after a bounded grace period.
+**Nothing may be both undeliverable and invisible.** Retries carry no date
+ceiling and the dashboard shows anything undelivered at any age. These two do
+not conflict with giving up: the grace period ends the *alert*, by withdrawing
+it, not the retry — so there is never a row that can neither be sent nor seen.
 
 **Never fake a delivery.** Marking rows notified when no email channel is
-configured spends a delivery that never happened — and "configured later" is a
-normal path, not a corner case. Make the *requirement* conditional instead.
+configured spends a delivery that never happened, and "configured later" is a
+normal path. Make the *requirement* conditional instead.
 
-**Silence is never good news.** An empty alert list means "nothing is wrong" only
-when something could have been detected. With three days of history, a green tick
-states the opposite of the truth.
+**Silence is never good news, per metric.** An empty alert list means "nothing
+is wrong" only where something could have been detected — which depends on that
+metric's own baseline depth, recent valid readings, wear, and source freshness,
+not on the pet having data in general.
 
-## 10. A green test suite is not evidence
+**The schema must be able to hold all of this.** The `alerts` table here has
+`acknowledged` and nothing else; delivered, resolved, days-outside and note
+columns are a prerequisite, not a later refinement. The predecessor discovered
+that by finding a stop reason it could not persist.
+
+## 10. A green test suite is not evidence — and neither is a green mutation run
 
 Every guarantee above is worth exactly as much as the test that would fail
 without it. Mutation testing — re-break the fix, confirm the suite notices — is
@@ -124,10 +139,28 @@ how that gets checked, and it has repeatedly found otherwise-invisible problems:
 
 - Tests that could never fail (`a + (b - a) === b`), or that passed when every
   value under test was null.
-- Logic living somewhere a test cannot reach (a SQL `WHERE` clause, or a
-  function body inside a page component). If a rule cannot be mutated, extract it.
+- Logic living somewhere a test cannot reach (a SQL `WHERE` clause, a function
+  body inside a page component). If a rule cannot be mutated, extract it.
 - A mutation that *stops* being caught means the code was duplicated and the
-  mutation hit a copy no test exercises. That is how the tripled window
-  arithmetic surfaced, before it could drift into a real bug.
+  mutation hit a copy no test exercises. That is how tripled window arithmetic
+  surfaced before it could drift into a real bug.
 
-Run it against this repo with the same pattern before trusting a release.
+But mutation testing only proves the tests notice changes to code that exists.
+It cannot detect, and has already failed to detect here:
+
+- **A wrong shared assumption.** Both the code and its test can believe the same
+  false thing. The vendor fixtures in `tractive-map.test.ts` are invented from
+  memory of the payload shape; mutation proves the mapper matches the fixture,
+  not that the fixture matches Tractive.
+- **An input class absent from the corpus.** Every timezone test passed while
+  `midnightEpoch` was wrong for zones that skip midnight, because no such zone
+  was in the tests.
+- **Behaviour with no code to mutate.** A missing column, an absent state, a
+  rule never written down. `import_jobs` could not persist why an import
+  stopped, and no mutation could have revealed it.
+- **The real environment.** The fake SQL runner cannot exhibit Postgres's actual
+  behaviour.
+
+So: mutation testing raises the floor. Recorded real fixtures, an adversarial
+reader, and running the thing against real data raise the ceiling. Do all four
+before trusting a release.

@@ -51,6 +51,9 @@ export const MIGRATIONS: Migration[] = [
         primary key (pet_id, date, metric)
       )`,
       `create index daily_metrics_lookup on daily_metrics (pet_id, metric, date desc)`,
+      // The lifecycle in docs/DECISIONS.md section 9 needs all of these.
+      // "Delivered" and "resolved" are independent facts: collapsing them into
+      // one flag means every fix for one breaks the other.
       `create table alerts (
         id                bigserial primary key,
         pet_id            text not null references pets(id) on delete cascade,
@@ -61,10 +64,22 @@ export const MIGRATIONS: Migration[] = [
         baseline_median   double precision,
         baseline_spread   double precision,
         severity          text not null,
+        -- How many days of the detection window were outside the band. Stored
+        -- so a retried email can state the real figure rather than guessing.
+        days_outside      int,
+        -- Absolute-threshold alerts carry their explanation as text.
+        note              text,
+        -- The user dismissed it.
         acknowledged      boolean not null default false,
+        -- An email genuinely went out. Never set without a successful send.
+        emailed           boolean not null default false,
+        -- The condition cleared but the alert has not been delivered yet: hide
+        -- it, keep retrying it.
+        resolved          boolean not null default false,
         created_at        timestamptz not null default now(),
         unique (pet_id, date, metric)
       )`,
+      `create index alerts_pending on alerts (pet_id, emailed, acknowledged)`,
       `create table journal (
         id          bigserial primary key,
         pet_id      text not null references pets(id) on delete cascade,

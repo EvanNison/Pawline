@@ -147,3 +147,14 @@ test("pending migrations are ordered even when the source list is not", () => {
   assert.deepEqual(pendingMigrations(1, scrambled).map((m) => m.version), [2, 3]);
   assert.deepEqual(pendingMigrations(3, scrambled), []);
 });
+
+test("the alerts table can hold the documented lifecycle", () => {
+  // docs/DECISIONS.md section 9 requires these as distinct facts. The
+  // predecessor collapsed "delivered" and "resolved" into one flag, and every
+  // fix for one then broke the other.
+  const sql = MIGRATIONS.flatMap((m) => m.statements).join("\n");
+  const alerts = sql.slice(sql.indexOf("create table alerts"), sql.indexOf("create table journal"));
+  for (const col of ["acknowledged", "emailed", "resolved", "days_outside", "note"]) {
+    assert.match(alerts, new RegExp(`\\b${col}\\b`), `alerts is missing ${col}`);
+  }
+});

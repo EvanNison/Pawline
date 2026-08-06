@@ -76,3 +76,58 @@ The original authorised *everyone* when `CRON_SECRET` was unset, on both the
 collector and a discovery route that returned raw account payloads. Missing
 configuration must deny, never allow. Secrets also never travel in query
 strings, where they end up in server logs.
+
+## 9. Alert lifecycle invariants — carried over, not re-derived
+
+Pawline has no alerting layer yet. When it gets one, these rules are not
+suggestions: each one cost a round of adversarial review in the predecessor,
+and most were found only after a previous fix had introduced them.
+
+**Identity.** An alert is keyed by the date of the *deviation*, never by the day
+it was noticed. Keying on "today" makes one unchanged stale condition produce a
+fresh row, and a fresh email, on every single run.
+
+**Order.** Raise → notify → withdraw, in that order, in one pass. Withdrawing
+before sending deletes a real alert whose email failed yesterday the moment
+today's data looks normal, so it is never reported at all.
+
+**Withdrawal needs positive evidence.** "No deviation detected" is not evidence
+of recovery: detection also returns nothing when there is too little history, or
+when too few recent readings survive filtering to satisfy the 2-of-3 rule. After
+a gap, a single fresh *and still abnormal* reading produces exactly that. Require
+that current readings actually sit inside the band.
+
+**"Delivered" and "resolved" are different facts.** Using one flag for both means
+every fix for one breaks the other. A resolved-but-undelivered alert must vanish
+from the dashboard immediately (claiming a recovered metric is trending is a
+false alert) while staying eligible for retry (or the deviation is never
+reported). Two states, not one.
+
+**Nothing may be both undeliverable and invisible.** Any age ceiling on retries
+strands alerts: they cannot be sent, cannot be withdrawn if withdrawal requires
+delivery, and are hidden for being old. Retry without a date ceiling, display
+anything undelivered at any age, and give up only after a bounded grace period.
+
+**Never fake a delivery.** Marking rows notified when no email channel is
+configured spends a delivery that never happened — and "configured later" is a
+normal path, not a corner case. Make the *requirement* conditional instead.
+
+**Silence is never good news.** An empty alert list means "nothing is wrong" only
+when something could have been detected. With three days of history, a green tick
+states the opposite of the truth.
+
+## 10. A green test suite is not evidence
+
+Every guarantee above is worth exactly as much as the test that would fail
+without it. Mutation testing — re-break the fix, confirm the suite notices — is
+how that gets checked, and it has repeatedly found otherwise-invisible problems:
+
+- Tests that could never fail (`a + (b - a) === b`), or that passed when every
+  value under test was null.
+- Logic living somewhere a test cannot reach (a SQL `WHERE` clause, or a
+  function body inside a page component). If a rule cannot be mutated, extract it.
+- A mutation that *stops* being caught means the code was duplicated and the
+  mutation hit a copy no test exercises. That is how the tripled window
+  arithmetic surfaced, before it could drift into a real bug.
+
+Run it against this repo with the same pattern before trusting a release.

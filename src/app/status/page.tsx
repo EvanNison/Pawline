@@ -6,6 +6,7 @@ import { buildStatus, headline, overallLevel, type Check, type Level } from "@/l
 import { emailChannel } from "@/lib/notify";
 import { encryptionKey } from "@/lib/secrets";
 import Link from "next/link";
+import NotConfigured from "@/components/NotConfigured";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,15 @@ const TONE: Record<Level, { dot: string; box: string; word: string }> = {
 };
 
 export default async function StatusPage() {
-  await ensureSchema();
+  if (!process.env.DATABASE_URL && !process.env.POSTGRES_URL) return <NotConfigured />;
+  try {
+    await ensureSchema();
+  } catch (e) {
+    // Reachability, not emptiness. A database that cannot be reached must say
+    // so rather than rendering as "no data yet", which reads as "your pet has
+    // no readings" — a false statement about the pet rather than the app.
+    return <NotConfigured detail={String(e).slice(0, 160)} />;
+  }
   const s = sql();
   const settings = await readSettings();
   const today = localDate(settings.timezone);

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import NotConfigured from "@/components/NotConfigured";
 import { ensureSchema, sql } from "@/lib/db";
 import { readSettings, writeSetting } from "@/lib/settings";
 import { protect } from "@/lib/secrets";
@@ -62,7 +63,15 @@ export default async function SetupPage({
   searchParams: Promise<{ status?: string }>;
 }) {
   const { status } = await searchParams;
-  await ensureSchema();
+  if (!process.env.DATABASE_URL && !process.env.POSTGRES_URL) return <NotConfigured />;
+  try {
+    await ensureSchema();
+  } catch (e) {
+    // Reachability, not emptiness. A database that cannot be reached must say
+    // so rather than rendering as "no data yet", which reads as "your pet has
+    // no readings" — a false statement about the pet rather than the app.
+    return <NotConfigured detail={String(e).slice(0, 160)} />;
+  }
   const settings = await readSettings();
   const ack = await acknowledgementFor("tractive");
   const msg = status ? MESSAGES[status] : null;

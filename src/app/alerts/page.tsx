@@ -1,4 +1,5 @@
 import Link from "next/link";
+import NotConfigured from "@/components/NotConfigured";
 import { ensureSchema, sql } from "@/lib/db";
 import { readSettings } from "@/lib/settings";
 import { listPets } from "@/lib/store";
@@ -17,7 +18,15 @@ function statusOf(a: { acknowledged: boolean; resolved: boolean; emailed: boolea
 }
 
 export default async function AlertsPage() {
-  await ensureSchema();
+  if (!process.env.DATABASE_URL && !process.env.POSTGRES_URL) return <NotConfigured />;
+  try {
+    await ensureSchema();
+  } catch (e) {
+    // Reachability, not emptiness. A database that cannot be reached must say
+    // so rather than rendering as "no data yet", which reads as "your pet has
+    // no readings" — a false statement about the pet rather than the app.
+    return <NotConfigured detail={String(e).slice(0, 160)} />;
+  }
   const s = sql();
   const settings = await readSettings();
   const pets = await listPets();

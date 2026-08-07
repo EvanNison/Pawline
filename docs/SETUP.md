@@ -34,7 +34,8 @@ somewhere safe for now (a note app is fine).
 **Dashboard password** — anything long you'll remember. This is what stops
 strangers reading your pet's data.
 
-**Cron secret** — any long random string. Mash the keyboard if you like.
+**Cron secret** — any long random string. Mash the keyboard if you like. This
+stops strangers triggering your data collection.
 
 **Encryption key** — this one must be a specific format. Ask your assistant:
 
@@ -72,17 +73,20 @@ Go to **Setup** and:
 
 ## Step 4 — Choose where the data comes from
 
-| Source | What it is |
-|---|---|
-| **CSV file** | Upload a spreadsheet. Good for data you already have. |
-| **EU Data Act export** | Your tracker vendor's own official export. EU residents only. |
-| **Tractive account** | Reads your account directly, every day, automatically. **Read the warning on that page before enabling it.** |
+| Source | What it is | Available |
+|---|---|---|
+| **Tractive account** | Reads your account directly, every day, automatically. **Read the warning on that page before enabling it.** | Yes |
+| **CSV file** | Import a spreadsheet of readings. | Not yet — the importer works, the upload page is not built |
+| **EU Data Act export** | Your vendor's own official export. EU residents only. | Not yet |
 
-The Tractive option is the only one that updates by itself, and it is the only
-one with a risk attached — Tractive's terms allow them to cancel a subscription
-for automated access. The setup page shows you the exact wording and makes you
-confirm. That decision is yours, and it's a real one: it's the same subscription
-that helps you find your pet if they go missing.
+So today there is one working source, and it is the one with a risk attached:
+Tractive's terms allow them to cancel a subscription for automated access. The
+setup page shows you the exact wording and makes you tick a box. That decision
+is yours, and it is a real one — it is the same subscription that helps you find
+your pet if they go missing.
+
+If you are not willing to accept that, this app has nothing to collect for you
+yet. That is an honest limitation rather than a reason to talk you into it.
 
 ## Step 5 — Check it works, then wait
 
@@ -111,7 +115,8 @@ says and paste it to your assistant along with this file.
 | What you see | What it means |
 |---|---|
 | "Not enough history to judge anything yet" | Working correctly. Come back in three weeks. |
-| Alerts configured but no emails arriving | Resend's shared sender only delivers to the address that owns the Resend account. To send anywhere else you must verify your own domain. |
+| Alerts configured but no emails arriving | If using Gmail, the App Password is wrong or 2-Step Verification is not fully on. Check the Status page — it names the sending route in use. |
+| "No source is enabled for scheduled collection" | Nothing is connected yet. See Step 4. |
 | "Could not decrypt the stored credential" | The encryption key changed. Re-enter your source login in Setup. |
 | Last collection is days old | The daily job stopped. Check /status for the recorded error. |
 | Charts show gaps | Normal if the collar was off or charging. Check the wear-time chart first — it explains dips in everything else. |

@@ -29,7 +29,21 @@ export interface MetricDef {
   species: Species[];
   /** Shown under the chart. Plain language — non-technical users read this. */
   help?: string;
+  /**
+   * The range the quantity can physically occupy, in canonical units.
+   *
+   * A baseline band is median +/- 3 spreads, which for a noisy metric runs past
+   * what is possible: the predecessor drew a "usual range" for nightly wakeups
+   * reaching -10, and one for a score out of 100 reaching 140. A range
+   * containing impossible readings tells the reader the chart has not been
+   * thought about.
+   */
+  min?: number;
+  max?: number;
 }
+
+/** Minutes in a day. DST makes one day a year longer, hence 25h of wear. */
+const DAY_MINUTES = 24 * 60;
 
 export const REGISTRY: MetricDef[] = [
   {
@@ -40,6 +54,7 @@ export const REGISTRY: MetricDef[] = [
     alert: true,
     species: ["dog", "cat"],
     help: "Beats per minute while at rest. Sustained changes in either direction are worth a vet's attention.",
+    min: 0,
   },
   {
     key: "resting_respiratory_rate",
@@ -49,6 +64,7 @@ export const REGISTRY: MetricDef[] = [
     alert: true,
     species: ["dog", "cat"],
     help: "Breaths per minute while at rest.",
+    min: 0,
   },
   {
     key: "sleep_score",
@@ -57,6 +73,8 @@ export const REGISTRY: MetricDef[] = [
     direction: "low_bad",
     alert: true,
     species: ["dog", "cat"],
+    min: 0,
+    max: 100,
   },
   {
     key: "night_sleep_minutes",
@@ -65,6 +83,8 @@ export const REGISTRY: MetricDef[] = [
     direction: "low_bad",
     alert: true,
     species: ["dog", "cat"],
+    min: 0,
+    max: DAY_MINUTES,
   },
   {
     key: "day_sleep_minutes",
@@ -73,6 +93,8 @@ export const REGISTRY: MetricDef[] = [
     direction: "both",
     alert: false,
     species: ["dog", "cat"],
+    min: 0,
+    max: DAY_MINUTES,
   },
   {
     key: "calm_minutes",
@@ -81,6 +103,8 @@ export const REGISTRY: MetricDef[] = [
     direction: "both",
     alert: false,
     species: ["dog", "cat"],
+    min: 0,
+    max: DAY_MINUTES,
   },
   {
     key: "sleep_interruptions",
@@ -89,6 +113,7 @@ export const REGISTRY: MetricDef[] = [
     direction: "high_bad",
     alert: true,
     species: ["dog", "cat"],
+    min: 0,
   },
   {
     key: "active_minutes",
@@ -97,6 +122,8 @@ export const REGISTRY: MetricDef[] = [
     direction: "low_bad",
     alert: true,
     species: ["dog", "cat"],
+    min: 0,
+    max: DAY_MINUTES,
   },
   {
     key: "rest_minutes",
@@ -105,6 +132,8 @@ export const REGISTRY: MetricDef[] = [
     direction: "both",
     alert: false,
     species: ["dog", "cat"],
+    min: 0,
+    max: DAY_MINUTES,
   },
   {
     key: "calories",
@@ -113,6 +142,7 @@ export const REGISTRY: MetricDef[] = [
     direction: "both",
     alert: false,
     species: ["dog", "cat"],
+    min: 0,
   },
   {
     key: "distance",
@@ -121,6 +151,7 @@ export const REGISTRY: MetricDef[] = [
     direction: "low_bad",
     alert: false,
     species: ["dog", "cat"],
+    min: 0,
   },
   {
     key: "weight",
@@ -130,6 +161,7 @@ export const REGISTRY: MetricDef[] = [
     alert: true,
     species: ["dog", "cat"],
     help: "The single most vet-relevant trend. Log it manually if your tracker doesn't report it.",
+    min: 0,
   },
   {
     key: "scratching",
@@ -139,6 +171,8 @@ export const REGISTRY: MetricDef[] = [
     alert: true,
     species: ["dog", "cat"],
     help: "Time spent scratching. A sustained rise often precedes a visible skin or allergy problem.",
+    min: 0,
+    max: DAY_MINUTES,
   },
   {
     key: "barking_events",
@@ -147,6 +181,7 @@ export const REGISTRY: MetricDef[] = [
     direction: "high_bad",
     alert: false,
     species: ["dog"],
+    min: 0,
   },
   {
     key: "wear_time",
@@ -156,6 +191,8 @@ export const REGISTRY: MetricDef[] = [
     alert: false,
     species: ["dog", "cat"],
     help: "How long the tracker was worn. Low wear explains dips in every other metric — check this first.",
+    min: 0,
+    max: 25 * 60,
   },
 ];
 
@@ -180,6 +217,16 @@ export const WEAR_SENSITIVE = new Set([
 
 /** Below this many minutes of wear, a day's totals are treated as unknown. */
 export const MIN_WEAR_MINUTES = 18 * 60;
+
+/** Clamp a value to the range its metric can physically occupy. */
+export function clampToRange(key: string, value: number): number {
+  const def = BY_KEY.get(key);
+  if (!def) return value;
+  let v = value;
+  if (def.min !== undefined) v = Math.max(def.min, v);
+  if (def.max !== undefined) v = Math.min(def.max, v);
+  return v;
+}
 
 const BY_KEY = new Map(REGISTRY.map((m) => [m.key, m]));
 

@@ -10,7 +10,6 @@ import postgres from "postgres";
 import { LATEST_VERSION, migrate as runMigrations, type SqlRunner } from "./schema";
 
 declare global {
-  // eslint-disable-next-line no-var
   var __pawlineSql: ReturnType<typeof postgres> | undefined;
 }
 

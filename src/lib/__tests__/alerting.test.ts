@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { detectDeviation, recentWithinBand, hasSufficientHistory, type DayPoint } from "../baseline";
-import { alertSeries, isAlertVisible, isCurrent, missingDays, shouldWithdraw } from "../alerting";
+import { alertSeries, isAlertVisible, isCurrent, shouldWithdraw } from "../alerting";
 
 const day = (n: number) => new Date(Date.UTC(2026, 0, 1) + n * 86_400_000).toISOString().slice(0, 10);
 const J = [0, 1, -1, 2, -2];
@@ -148,4 +148,34 @@ test("a dismissed alert does not return through the undelivered clause", () => {
 // -------------------------------------------- reported by external review
 
 
+
+
+test("the staleness gate accepts recent anchors and rejects old ones", () => {
+  assert.equal(isCurrent("2026-08-20", "2026-08-20"), true);
+  assert.equal(isCurrent("2026-08-19", "2026-08-20"), true);
+  assert.equal(isCurrent("2026-08-18", "2026-08-20"), true);
+  assert.equal(isCurrent("2026-08-17", "2026-08-20"), false, "three days back is stale");
+  assert.equal(isCurrent("2026-07-01", "2026-08-20"), false);
+  assert.equal(isCurrent(undefined, "2026-08-20"), false);
+  // A future date is not "current" either — a clock skew must not look fresh.
+  assert.equal(isCurrent("2026-08-21", "2026-08-20"), false);
+});
+
+test("sufficient-history counts the right window, not raw rows", () => {
+  // 21 readings scattered a year apart look like plenty and are not.
+  const scattered: DayPoint[] = Array.from({ length: 21 }, (_, i) => ({ date: day(i * 20), value: 62 }));
+  assert.equal(hasSufficientHistory(scattered), false);
+  // 21 readings all inside the excluded detection window: also not enough.
+  const crammed: DayPoint[] = Array.from({ length: 21 }, (_, i) => ({ date: day(100), value: 62 + i }));
+  assert.equal(hasSufficientHistory(crammed), false);
+  assert.equal(hasSufficientHistory(steady(62, 60)), true);
+  assert.equal(hasSufficientHistory([]), false);
+});
+
+test("recent alerts show; old delivered ones age off", () => {
+  const today = "2026-08-20";
+  const live = { emailed: true, acknowledged: false, resolved: false };
+  assert.equal(isAlertVisible({ ...live, date: "2026-08-06" }, today), true, "14 days is inside");
+  assert.equal(isAlertVisible({ ...live, date: "2026-08-05" }, today), false, "15 days is out");
+});
 

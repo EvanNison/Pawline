@@ -1,6 +1,11 @@
 /**
  * Which readings are eligible to raise an alert.
  *
+ * Day-selection for collection lives in collector.ts, which supersedes the
+ * simpler "which days are absent" rule this module used to carry. One
+ * implementation, not two: duplicated window arithmetic is how an off-by-one
+ * survived undetected in the predecessor.
+ *
  * Extracted from the collector so it can be tested directly. When this lived
  * inline in the route, a test could only re-implement the same filters beside
  * it — which passes whether or not the production code still does it.
@@ -94,27 +99,6 @@ export function shouldWithdraw(
   // the 2-of-3 rule, so no deviation is reported, and the alert was cleared
   // while the metric was still bad.
   return recentWithinBand(series, direction);
-}
-
-/**
- * Days within `window` that need re-fetching because no complete record exists.
- *
- * A day counts as present only if every probe metric is there: a run that
- * stored activity but died before sleep left a day that looked complete and was
- * never repaired. Bounded by `limit` so recovery stays gentle.
- */
-export function missingDays(
-  today: string,
-  present: ReadonlySet<string>,
-  { window, limit, skipRecent = 2 }: { window: number; limit: number; skipRecent?: number }
-): string[] {
-  const out: string[] = [];
-  // `skipRecent` days are always re-fetched anyway, so start past them.
-  for (let i = skipRecent; i <= window && out.length < limit; i++) {
-    const d = new Date(Date.parse(`${today}T00:00:00Z`) - i * 86_400_000).toISOString().slice(0, 10);
-    if (!present.has(d)) out.push(d);
-  }
-  return out;
 }
 
 /** The fields that decide whether an alert belongs on the dashboard. */

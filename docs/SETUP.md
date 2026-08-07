@@ -62,11 +62,13 @@ Open the address. It will ask for the dashboard password from Step 1.
 
 Go to **Setup** and:
 
-- Confirm your timezone (it will guess from your browser — correct it if your
-  pet lives somewhere else).
-- Choose **metric or imperial** units.
-- Pick a **data source** (see below).
-- Optionally add email alerts.
+- Set your pet's **timezone** — this decides which day each reading belongs to,
+  so set it once and leave it.
+- Choose **metric or imperial** units, and dog or cat.
+- Optionally add **email alerts**. Sending through your own Gmail is simplest:
+  it needs a Google *App Password*, not your normal password, and the form
+  links to the page that generates one.
+- Then connect a **data source** (see below).
 
 ## Step 4 — Choose where the data comes from
 
@@ -82,10 +84,11 @@ for automated access. The setup page shows you the exact wording and makes you
 confirm. That decision is yours, and it's a real one: it's the same subscription
 that helps you find your pet if they go missing.
 
-## Step 5 — Collect once, then wait
+## Step 5 — Check it works, then wait
 
-Press **Collect now**. Don't wait for the overnight run to find out whether it
-works.
+Open **Status**. It tells you whether collection is running, whether each
+measurement is arriving, and what it cannot yet check. Don't wait for the
+overnight run to find out something is wrong.
 
 Then wait about **three weeks**. Pawline deliberately refuses to judge anything
 until it has enough history — a "usual range" built from four days is a

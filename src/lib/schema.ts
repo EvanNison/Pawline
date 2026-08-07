@@ -76,6 +76,15 @@ export const MIGRATIONS: Migration[] = [
         -- The condition cleared but the alert has not been delivered yet: hide
         -- it, keep retrying it.
         resolved          boolean not null default false,
+        resolved_at       timestamptz,
+        -- Delivery was given up on. Distinct from "emailed", which must only
+        -- ever mean a message genuinely went out.
+        abandoned         boolean not null default false,
+        -- Notifications for this metric are muted. Detection still ran and the
+        -- row still exists: a mute that suppressed the row would make a
+        -- suppressed detection invisible, which is the bug class this project
+        -- keeps rediscovering.
+        muted             boolean not null default false,
         created_at        timestamptz not null default now(),
         unique (pet_id, date, metric)
       )`,

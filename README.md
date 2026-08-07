@@ -7,14 +7,24 @@ yesterday?" and useless for "has anything been slowly changing since spring?" �
 which is the question that actually finds problems early.
 
 Pawline keeps your pet's data **forever**, learns what's normal *for your pet*,
-and tells you when something drifts away from it. It produces a printable report
-you can hand to your vet.
+and tells you when something drifts away from it.
 
 > **This is not a veterinary device.** It spots changes in numbers. It cannot
 > diagnose anything. A calm dashboard is not evidence your pet is well, and an
 > alert is a reason to look closer — not a diagnosis. Always talk to your vet.
 
 ---
+
+## Deploy it
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FEvanNison%2FPawline&env=APP_PASSWORD,ENCRYPTION_KEY,CRON_SECRET&envDescription=Three%20secrets%20you%20generate%20yourself%20—%20see%20the%20setup%20guide&envLink=https%3A%2F%2Fgithub.com%2FEvanNison%2FPawline%2Fblob%2Fmain%2Fdocs%2FSETUP.md&stores=%5B%7B%22type%22%3A%22postgres%22%7D%5D)
+
+One click gets you a copy, a free Postgres database, and a running site. It asks
+for three values you generate yourself — [**the setup guide**](docs/SETUP.md)
+walks through it, and is written to be pasted to an AI assistant if you're not
+a developer.
+
+Everything else is configured in the browser. There is no terminal step.
 
 ## What it does
 
@@ -25,10 +35,15 @@ you can hand to your vet.
 - **Alerts that require persistence.** A metric must sit outside the usual range
   on at least 2 of the last 3 *calendar days* before anything fires. One weird
   Tuesday is not an alert.
-- **Honest silence.** Nothing is judged until there are 21 days of history. Until
-  then the app says it doesn't know, rather than drawing a confident band around
-  four data points.
-- **A vet report.** Printable, plain, with year-over-year deltas flagged.
+- **Honest silence.** Nothing is judged until 21 days of history exist. Until
+  then it says so, rather than drawing a confident band around four data points.
+- **A status page.** Collection can stop while the charts keep showing last
+  month, so there's a page that answers "is this actually still working?" — and
+  it reports what it *cannot* check rather than assuming those parts are fine.
+- **An alert history**, for the conversation with your vet: not "flagged today"
+  but "flagged three times since June, here are the dates."
+- **Metric or imperial**, dog or cat, and only the measurements your tracker
+  actually produces — an always-empty chart reads as "your pet didn't do that".
 
 ## Where the data comes from
 
@@ -37,12 +52,12 @@ vendor. Data arrives through a *source adapter*, and you choose which to enable:
 
 | Source | Risk | Notes |
 |---|---|---|
-| **CSV import** | None | Bring data from anywhere. Also the export/backup format. |
-| **EU Data Act export** | None | Official vendor export. EU residents only. |
-| **Tractive API** | ⚠️ Vendor terms | Reads your own account through the same private API the vendor's web app uses. **Read the warning below.** |
+| **CSV import** | None | Bring data from anywhere. Also the export format. |
+| **EU Data Act export** | None | Official vendor export. EU residents only. *(not built yet)* |
+| **Tractive API** | ⚠️ Vendor terms | Reads your own account. **Read the warning below.** |
 
 If a vendor changes or blocks its API, one adapter breaks. Your stored history,
-your baselines, and your vet report do not.
+your baselines and your alert record do not.
 
 ### ⚠️ Before enabling the Tractive adapter
 
@@ -55,53 +70,46 @@ Tractive's Terms of Service, [§5.8](https://assets.tractive.com/static/legal/en
 > without notice. A claim for reimbursement for already paid service fees cannot
 > be made in this case."
 
-The same section covers accessing device data "via means other than those made
-available to the user". §5.2 additionally requires you to keep your credentials
-confidential.
-
 **Plainly: using this adapter may get your subscription terminated with no
 refund, on a device you may rely on to find your pet.** That is your call to
-make, not ours, and not one to make casually. The adapter is off by default and
-requires an explicit acknowledgement.
+make, and not one to make casually. It is off by default and the setup page
+requires an explicit acknowledgement, which is recorded with a date.
 
 We are not affiliated with, endorsed by, or connected to Tractive GmbH. Other
 open-source Tractive clients exist; their existence is evidence the API is
 *reachable*, not that this use is *permitted*.
 
-If you're in the EU, prefer the Data Act export — it's the vendor's own
-supported path and carries none of this risk.
+If you're in the EU, prefer the Data Act export — the vendor's own supported
+path, with none of this risk.
 
 ## Status
 
-Early. The analysis core is built and tested; the web app is being ported.
+Runnable. The analysis core, collection, alerting and all four pages work.
 
-- [x] Baseline + deviation detection (calendar-day windows, robust statistics)
-- [x] Timezone/DST-correct day boundaries
-- [x] Canonical SI storage with metric/imperial display
-- [x] Source adapter interface
-- [x] Versioned, atomic schema migrations
-- [x] Encrypted credential storage (AES-256-GCM)
-- [x] Resumable history importer
-- [x] CSV source (import + export format)
-- [x] Tractive payload mapping (pure, fixture-testable)
-- [x] Test suite — 95 tests
-- [x] [Setup guide](docs/SETUP.md) for a non-technical installer
-- [ ] Tractive network client + the acknowledgement gate
+- [x] Baselines, alerting, timezone/DST handling, units, migrations
+- [x] Encrypted credentials, resumable importer, CSV source
+- [x] Collector with gap repair, and the Tractive adapter behind its gate
+- [x] Dashboard, status, alerts and setup pages
+- [x] One-click deploy
 - [ ] EU Data Act importer
-- [ ] Web dashboard, trends, vet report
-- [ ] One-click deploy button
-- [ ] `/status` self-diagnosis page
+- [ ] CSV upload through the browser (the parser exists; the page does not)
+- [ ] Not yet run against a real account for a sustained period
 
 ## Development
 
 ```bash
 npm install
-npm test
+npm test          # 175 tests
 npm run typecheck
+npm run dev
 ```
+
+The interesting logic lives in `src/lib/` and is tested without a database.
+`docs/DECISIONS.md` records why each rule is the way it is — most were bugs
+first. Worth reading before changing anything in the alert lifecycle.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). The licence covers this code. It does not grant
-you any rights in relation to any third-party service, and it does not alter
-whatever agreement you have with your tracker's vendor.
+MIT — see [LICENSE](LICENSE). The licence covers this code. It grants you no
+rights in relation to any third-party service, and does not alter whatever
+agreement you have with your tracker's vendor.

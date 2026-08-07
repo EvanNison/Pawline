@@ -121,6 +121,86 @@ export function rollingBaseline(series: DayPoint[]): (Baseline | null)[] {
   });
 }
 
+/**
+ * Split a series into the detection window and the baseline history behind it,
+ * both measured in calendar days from the newest reading.
+ *
+ * Single source of truth: detectDeviation, recentWithinBand and
+ * hasSufficientHistory all ask the same question about the same windows, and
+ * three hand-rolled copies of this arithmetic would drift — the off-by-one that
+ * once made the baseline 59 days instead of 60 lived in exactly this code.
+ */
+export interface Windows {
+  /** Readings inside the detection window (the most recent DETECTION_WINDOW days). */
+  recent: DayPoint[];
+  /** Values in the BASELINE_WINDOW days before it. */
+  history: number[];
+}
+
+export function splitWindows(series: DayPoint[]): Windows | null {
+  if (series.length === 0) return null;
+  const anchor = dayNum(series[series.length - 1].date);
+  const detectionStart = anchor - DETECTION_WINDOW + 1;
+  // Inclusive lower bound: `>` here made the baseline 59 days wide, not the
+  // documented 60, and disagreed with rollingBaseline.
+  const historyStart = detectionStart - BASELINE_WINDOW;
+
+  const recent: DayPoint[] = [];
+  const history: number[] = [];
+  for (const p of series) {
+    const d = dayNum(p.date);
+    if (d >= detectionStart) recent.push(p);
+    else if (d >= historyStart) history.push(p.value);
+  }
+  return { recent, history };
+}
+
+/**
+ * Whether a series carries enough history, in the right window, for
+ * detectDeviation to reach any conclusion.
+ *
+ * Counting raw rows is not equivalent: 21 readings scattered over two years, or
+ * 21 readings that all sit inside the excluded detection window, look like
+ * enough and are not. Used to tell "no deviations" apart from "nothing has been
+ * assessed", which must not be shown as the same green tick.
+ */
+export function hasSufficientHistory(series: DayPoint[]): boolean {
+  const w = splitWindows(series);
+  return w !== null && w.history.length >= MIN_BASELINE_DAYS;
+}
+
+/**
+ * True when every reading in the detection window sits inside the usual range
+ * on the metric's bad side — i.e. positive evidence that things are normal.
+ *
+ * This is NOT the negation of detectDeviation. That returns null both for
+ * "readings are fine" and for "I cannot tell": too little history, or too few
+ * recent readings to satisfy the 2-of-3 rule. After filtered or missing days, a
+ * single fresh and still-abnormal reading produces exactly that ambiguous null —
+ * so withdrawing a standing alert on it would clear a warning while the metric
+ * is still bad. Withdrawal must require this instead.
+ */
+export function recentWithinBand(series: DayPoint[], direction: Direction): boolean {
+  const w = splitWindows(series);
+  if (!w) return false;
+  if (w.history.length < MIN_BASELINE_DAYS) return false; // no basis for an opinion
+  if (w.recent.length === 0) return false; // nothing current to judge
+
+  const base = computeBaseline(w.history);
+  if (!base) return false;
+  const spread = spreadOf(base, w.history);
+  const hi = base.median + SIGMA * spread;
+  const lo = base.median - SIGMA * spread;
+
+  const checkHigh = direction === "high_bad" || direction === "both";
+  const checkLow = direction === "low_bad" || direction === "both";
+  for (const p of w.recent) {
+    if (checkHigh && p.value > hi) return false;
+    if (checkLow && p.value < lo) return false;
+  }
+  return true;
+}
+
 export interface Deviation {
   metric: string;
   direction: "high" | "low";
@@ -142,24 +222,9 @@ export function detectDeviation(
   metric: string,
   direction: Direction
 ): Deviation | null {
-  if (series.length === 0) return null;
-
-  // Both windows are anchored to the newest reading's date and selected by
-  // calendar day, so a gap in collection cannot manufacture a run of "days".
-  const anchor = dayNum(series[series.length - 1].date);
-  const detectionStart = anchor - DETECTION_WINDOW + 1;
-  const historyStart = detectionStart - BASELINE_WINDOW;
-
-  const recent: DayPoint[] = [];
-  const history: number[] = [];
-  for (const p of series) {
-    const d = dayNum(p.date);
-    if (d >= detectionStart) recent.push(p);
-    // Inclusive: `>` made the baseline 59 days wide, not the documented
-    // BASELINE_WINDOW of 60, and disagreed with rollingBaseline — so a chart
-    // could draw a band while alerting still thought it lacked enough history.
-    else if (d >= historyStart) history.push(p.value);
-  }
+  const w = splitWindows(series);
+  if (!w) return null;
+  const { recent, history } = w;
   if (history.length < MIN_BASELINE_DAYS) return null;
 
   const base = computeBaseline(history);

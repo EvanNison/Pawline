@@ -159,6 +159,28 @@ export const REGISTRY: MetricDef[] = [
   },
 ];
 
+/**
+ * Daily totals that undercount when the collar is off: they measure elapsed
+ * activity, so a half-worn day reports a genuinely small number for a day whose
+ * true value is unknown. Averages (heart rate, respiratory rate) are excluded —
+ * a partial day still yields a valid average from the readings it did take.
+ */
+export const WEAR_SENSITIVE = new Set([
+  "active_minutes",
+  "rest_minutes",
+  "calories",
+  "distance",
+  "scratching",
+  "night_sleep_minutes",
+  "day_sleep_minutes",
+  "calm_minutes",
+  "sleep_interruptions",
+  "sleep_score",
+]);
+
+/** Below this many minutes of wear, a day's totals are treated as unknown. */
+export const MIN_WEAR_MINUTES = 18 * 60;
+
 const BY_KEY = new Map(REGISTRY.map((m) => [m.key, m]));
 
 export function metric(key: string): MetricDef | undefined {

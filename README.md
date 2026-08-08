@@ -97,6 +97,7 @@ Working, and verified against a real Postgres:
 - [x] Encrypted credentials, resumable importer, CSV source
 - [x] Collector with gap repair, and the Tractive adapter behind its gate
 - [x] Dashboard, status, alerts and setup pages
+- [x] CSV import through the browser, verified end to end against a real database
 - [x] Every SQL query checked against the real schema (`npm run check:sql`)
 
 Not done:
@@ -104,7 +105,6 @@ Not done:
 - [ ] Never run against a real tracker account for a sustained period. This is
       the big one — the analysis is proven on synthetic data only.
 - [ ] EU Data Act importer
-- [ ] CSV upload through the browser (the parser exists; the page does not)
 - [ ] Statistical calibration: no measured false-alert rate, no detection-delay
       figure, no handling of seasonality or day-to-day autocorrelation
 
@@ -112,10 +112,24 @@ Not done:
 
 ```bash
 npm install
-npm test          # 175 tests
+npm test              # 200 tests, no database needed
 npm run typecheck
 npm run dev
 ```
+
+Two checks need a real Postgres in `DATABASE_URL`, and both exist because the
+unit suite provably cannot catch what they catch. Each builds a throwaway
+schema and drops it afterwards:
+
+```bash
+npm run check:sql     # PREPAREs every query in src/ against the real schema
+npm run check:import  # runs the CSV import path for real, end to end
+```
+
+`check:sql` exists because a query can be fully "tested" against a fake runner
+and still name a column that does not exist. `check:import` exists because the
+driver returns `jsonb` as a *string*, and a TypeScript cast hid that until a
+real read exposed it — every dashboard was rendering zero charts.
 
 The interesting logic lives in `src/lib/` and is tested without a database.
 `docs/DECISIONS.md` records why each rule is the way it is — most were bugs

@@ -11,6 +11,7 @@
     "lint": "eslint",
     "test": "tsx --test src/lib/__tests__/*.test.ts",
     "check:sql": "tsx scripts/check-sql.mjs",
+    "check:import": "tsx scripts/check-import.mjs",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

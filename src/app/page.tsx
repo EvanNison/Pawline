@@ -34,10 +34,15 @@ export default async function Home() {
       <main className="mx-auto max-w-2xl space-y-4 p-4 sm:p-6">
         <h1 className="text-xl font-bold sm:text-2xl">🐾 Pawline</h1>
         <p className="text-zinc-600 dark:text-zinc-400">
-          No pet data yet. Choose where your readings come from, then run a collection.
+          No pet data yet. Import a spreadsheet to see something immediately, or connect a
+          tracker to collect automatically from now on.
         </p>
+        {/* Import leads, because it is the option that works for everyone and
+            asks for nothing. Connecting a tracker means accepting a vendor's
+            terms, which should be a considered choice rather than the only door. */}
         <div className="flex flex-wrap gap-2 text-sm">
-          <Link href="/setup" className="rounded-md bg-indigo-600 px-3 py-1.5 text-white">⚙️ Set up a source</Link>
+          <Link href="/import" className="rounded-md bg-indigo-600 px-3 py-1.5 text-white">📄 Import a spreadsheet</Link>
+          <Link href="/setup" className="rounded-md bg-zinc-100 px-3 py-1.5 dark:bg-zinc-800">⚙️ Connect a tracker</Link>
           <Link href="/status" className="rounded-md bg-zinc-100 px-3 py-1.5 dark:bg-zinc-800">🩹 Status</Link>
         </div>
       </main>
@@ -126,6 +131,7 @@ export default async function Home() {
         <nav className="flex flex-wrap gap-1.5 text-sm">
           <Link href="/alerts" className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">🔔 Alerts</Link>
           <Link href="/status" className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">🩹 Status</Link>
+          <Link href="/import" className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">📄 Import</Link>
           <Link href="/setup" className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">⚙️ Setup</Link>
         </nav>
       </header>

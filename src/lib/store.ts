@@ -21,6 +21,32 @@ export interface Pet {
   capabilities: string[];
 }
 
+/**
+ * Read a jsonb array column back as an actual array.
+ *
+ * This driver hands `jsonb` back as a **string**, so `r.capabilities as string[]`
+ * was a compile-time cast over a runtime lie. Everything downstream then did
+ * `new Set(capabilities)` on a string, producing a set of single characters, so
+ * `cap.has("resting_heart_rate")` was always false — and every dashboard showed
+ * a pet name, "not enough history", and no charts at all, from any source.
+ *
+ * Invisible to the unit suite, which hands back genuine arrays from a fake
+ * runner. Accepts both shapes so a driver or config that does parse jsonb keeps
+ * working.
+ */
+export function toStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 export async function listPets(): Promise<Pet[]> {
   const rows = await sql()`select id, source_id, source_key, name, species, timezone, capabilities
     from pets order by name`;
@@ -31,7 +57,7 @@ export async function listPets(): Promise<Pet[]> {
     name: r.name as string,
     species: r.species as string,
     timezone: r.timezone as string,
-    capabilities: (r.capabilities as string[]) ?? [],
+    capabilities: toStringArray(r.capabilities),
   }));
 }
 
@@ -66,6 +92,46 @@ export async function writeReadings(petId: string, sourceId: string, readings: R
       on conflict (pet_id, date, metric) do update set
         value = excluded.value, source_id = excluded.source_id, updated_at = now()`;
     written++;
+  }
+  return written;
+}
+
+/**
+ * Store many readings at once, for imports.
+ *
+ * Separate from writeReadings because the shapes differ by three orders of
+ * magnitude: a collection writes a handful of rows for one day, while an import
+ * of two years across six metrics is several thousand. One round trip each is
+ * fine for the former and several minutes for the latter, which a serverless
+ * request does not have.
+ *
+ * Same conflict rule as the single-row path, so re-uploading a corrected file
+ * overwrites cleanly rather than erroring or duplicating.
+ */
+export async function writeReadingsBulk(
+  petId: string,
+  sourceId: string,
+  readings: Reading[],
+  chunkSize = 500
+): Promise<number> {
+  const rows = readings
+    .filter((r) => isKnownMetric(r.metric) && Number.isFinite(r.value))
+    .map((r) => ({
+      pet_id: petId,
+      date: r.date,
+      metric: r.metric,
+      value: r.value,
+      source_id: sourceId,
+    }));
+
+  const s = sql();
+  let written = 0;
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    const chunk = rows.slice(i, i + chunkSize);
+    await s`insert into daily_metrics ${s(chunk, "pet_id", "date", "metric", "value", "source_id")}
+      on conflict (pet_id, date, metric) do update set
+        value = excluded.value, source_id = excluded.source_id, updated_at = now()`;
+    written += chunk.length;
   }
   return written;
 }

@@ -95,18 +95,24 @@ Go to **Setup** and:
 
 | Source | What it is | Available |
 |---|---|---|
+| **Spreadsheet (CSV)** | Upload a file of daily readings, from any tracker or kept by hand. No account, nothing to accept. | Yes — the **Import** page |
 | **Tractive account** | Reads your account directly, every day, automatically. **Read the warning on that page before enabling it.** | Yes |
-| **CSV file** | Import a spreadsheet of readings. | Not yet — the importer works, the upload page is not built |
 | **EU Data Act export** | Your vendor's own official export. EU residents only. | Not yet |
 
-So today there is one working source, and it is the one with a risk attached:
-Tractive's terms allow them to cancel a subscription for automated access. The
-setup page shows you the exact wording and makes you tick a box. That decision
-is yours, and it is a real one — it is the same subscription that helps you find
-your pet if they go missing.
+**Start with Import if you have any data at all.** It carries no risk, works
+with any brand, and you will see charts within a minute instead of waiting for
+an overnight run. The page tells you what the file should look like and lists
+every column name it understands. Anything it cannot read is skipped and shown
+to you with the row number, never guessed at.
 
-If you are not willing to accept that, this app has nothing to collect for you
-yet. That is an honest limitation rather than a reason to talk you into it.
+The **Tractive** option is the one with a risk attached: their terms allow them
+to cancel a subscription for automated access. The setup page shows you the
+exact wording and makes you tick a box. That decision is yours, and it is a real
+one — it is the same subscription that helps you find your pet if they go
+missing.
+
+If you are not willing to accept that, use Import. The app works fully without
+ever connecting a vendor account.
 
 ## Step 5 — Check it works, then wait
 

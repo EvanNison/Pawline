@@ -116,8 +116,15 @@ try {
       // PREPARE accepts only SELECT/INSERT/UPDATE/DELETE/VALUES. DDL is
       // executed for real above, so it is checked more strictly, not less.
       if (/^\s*(create|alter|drop)\b/i.test(q.text)) continue;
-      if (/\bfrom\s+\$\d|\bjoin\s+\$\d|\binto\s+\$\d|\bupdate\s+\$\d/i.test(q.text)) {
-        failures.push({ ...q, error: "SKIPPED: dynamic identifier — not validated" });
+      // postgres.js helpers — sql(rows, ...cols) for bulk values, sql('ident')
+      // for dynamic identifiers — collapse to a bare $N that PREPARE cannot
+      // type. Reported rather than dropped, so "checked" never quietly means
+      // "checked except the ones that were hard". These need execution tests.
+      if (
+        /\bfrom\s+\$\d|\bjoin\s+\$\d|\binto\s+\$\d|\bupdate\s+\$\d/i.test(q.text) ||
+        /\binsert\s+into\s+[a-z_."]+\s+\$\d/i.test(q.text)
+      ) {
+        failures.push({ ...q, error: "SKIPPED: postgres.js helper — needs an execution test" });
         continue;
       }
       checked++;

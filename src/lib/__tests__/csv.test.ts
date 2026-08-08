@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CsvSource, parseCsv } from "../sources/csv";
+import { CsvSource, parseCsv, summarizeImport } from "../sources/csv";
 
 const TZ = "America/New_York";
 
@@ -185,4 +185,55 @@ test("a blank cell is not measured, and is distinguishable from a real zero", ()
   assert.equal(readings[0].value, 0, "an explicit zero IS kept");
   const { warnings } = parseCsv(["date,active_minutes", "2026-08-01,", "2026-08-02,0"].join("\n"));
   assert.deepEqual(warnings, [], "a blank is expected input, not an error");
+});
+
+// summarizeImport is what the import screen reads. It is the only account the
+// person gets of what happened to their file, so its honesty is load-bearing.
+test("the summary reports the range, the day count and the per-metric totals", () => {
+  const s = summarizeImport(
+    parseCsv(
+      [
+        "date,resting_heart_rate,night_sleep_minutes",
+        "2026-08-01,62,480",
+        "2026-08-03,64,",
+        "2026-08-02,63,455",
+      ].join("\n")
+    )
+  );
+  assert.equal(s.readings, 5);
+  assert.equal(s.days, 3);
+  assert.equal(s.from, "2026-08-01");
+  assert.equal(s.to, "2026-08-03", "range must come from sorted dates, not file order");
+  assert.deepEqual(s.byMetric, [
+    { metric: "resting_heart_rate", count: 3 },
+    { metric: "night_sleep_minutes", count: 2 },
+  ]);
+});
+
+// Showing ten problems out of four hundred with no sign of the rest would make
+// a badly broken export look very nearly clean.
+test("a truncated warning list says how many it is hiding", () => {
+  const rows = ["date,resting_heart_rate"];
+  for (let i = 0; i < 30; i++) rows.push(`2026-08-01,not-a-number`);
+  const s = summarizeImport(parseCsv(rows.join("\n")), 10);
+  assert.equal(s.warnings.length, 10);
+  assert.equal(s.hiddenWarnings, 20);
+  assert.equal(s.warnings.length + s.hiddenWarnings, 30, "every warning is accounted for");
+});
+
+test("a file with nothing usable summarises as empty rather than throwing", () => {
+  const s = summarizeImport(parseCsv("nonsense"));
+  assert.equal(s.readings, 0);
+  assert.equal(s.days, 0);
+  assert.equal(s.from, null);
+  assert.equal(s.to, null);
+  assert.ok(s.warnings.length > 0, "and says why");
+});
+
+test("the summary names every pet in a multi-pet file", () => {
+  const s = summarizeImport(
+    parseCsv("date,pet,resting_heart_rate\n2026-08-01,Rex,62\n2026-08-01,Bo,70")
+  );
+  assert.deepEqual(s.pets.sort(), ["Bo", "Rex"]);
+  assert.equal(s.readings, 2);
 });

@@ -164,3 +164,53 @@ It cannot detect, and has already failed to detect here:
 So: mutation testing raises the floor. Recorded real fixtures, an adversarial
 reader, and running the thing against real data raise the ceiling. Do all four
 before trusting a release.
+
+## 11. Every query is checked against a real schema, because tests cannot be
+
+§10 predicted this: "the fake SQL runner cannot exhibit Postgres's actual
+behaviour." Two bugs then proved it, both invisible to 177 passing tests, a
+clean typecheck and a clean lint:
+
+- `/status` selected `runs.trigger`; the column is `kind`. The page you open
+  when something looks wrong was the only reader that disagreed with the
+  schema, so it failed precisely when it was needed.
+- `upgradeStoredSecrets` read `app_credentials`, a table inherited from the
+  predecessor that this schema never creates. The error was swallowed by a
+  `.catch()`, so credentials silently stayed in plaintext while the status page
+  promised they would be encrypted on the next collection.
+
+`npm run check:sql` builds the schema in a throwaway namespace and `PREPARE`s
+every tagged template in `src/`. `PREPARE` resolves identifiers, types and
+operators without executing, which is exactly the layer these bugs live in —
+and the layer that cost the predecessor two days of data to `date >= integer`.
+
+**Run it before any release.** A query that only appears on an error path, or
+once a month, is otherwise first executed by a user.
+
+## 12. Two auth layers, because Server Actions are their own front door
+
+`APP_PASSWORD` was documented in `.env.example` and promised in `SETUP.md`
+("a private website only you can open") and read nowhere in `src/`. Every page
+was public, including the setup form that stores Tractive credentials. The
+documentation made the deployment look safer than it was, which is worse than
+having said nothing.
+
+The fix is deliberately redundant:
+
+- `proxy.ts` redirects unauthenticated requests. Its matcher is an *exclusion*
+  list, so a new page is protected unless someone deliberately exempts it.
+- `requireSession()` is the first statement in every page and every Server
+  Action.
+
+The second layer is load-bearing rather than belt-and-braces: **Next dispatches
+Server Actions by action id, not by route.** The setup actions are therefore
+reachable through a POST to `/login`, which Proxy must exempt. Only the
+in-action check stops that. Next's own guidance says the same thing — Proxy
+"should not be your only line of defense", and Server Actions are to be treated
+as public endpoints.
+
+Sessions are an HMAC of the expiry keyed by `APP_PASSWORD`, so changing the
+password signs every device out with no revocation list to maintain.
+
+A missing `APP_PASSWORD` in production refuses every request and explains why.
+Defaulting open when unconfigured is the bug this section exists to record.

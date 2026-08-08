@@ -166,6 +166,23 @@ try {
     check("and its direction", raised[0].direction === "high", raised[0].direction);
   }
 
+  // The gate that protects someone's subscription, proved against a real
+  // database rather than a mock. Setting the enabled flag alone must not be
+  // enough: without a recorded acknowledgement the source must stay dark.
+  const { isEnabled, setEnabled, scheduledSources, recordAcknowledgement } =
+    await import("../src/lib/sources/registry.ts");
+
+  await setEnabled("tractive", true);
+  check("enabling without acknowledgement does not enable the source", (await isEnabled("tractive")) === false);
+  check("and it is not scheduled to run", (await scheduledSources()).length === 0);
+
+  await recordAcknowledgement("tractive");
+  check("acknowledging is what actually opens the gate", (await isEnabled("tractive")) === true);
+
+  await setEnabled("tractive", false);
+  check("turning it off closes it again even with the acknowledgement on file",
+    (await isEnabled("tractive")) === false);
+
   await sql().end({ timeout: 5 });
 } finally {
   await admin.unsafe(`drop schema if exists ${SCHEMA} cascade`).catch(() => {});

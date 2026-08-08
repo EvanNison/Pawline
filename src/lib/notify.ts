@@ -149,11 +149,26 @@ export function renderAlertLine(a: AlertRecord, units: UnitSystem = "metric"): s
   // kilograms is the same contradiction as a chart with a mismatched band.
   const show = (v: number | null) =>
     v === null ? "—" : def ? format(v, def.dimension, units) : v.toFixed(1);
+  // format() already carries the unit; a second one left "74 /min  vs." with a
+  // double space in the one message people actually read.
   const value = show(a.value);
   const usual = show(a.baseline_median);
-  const unit = "";
   const days = a.days_outside ? `${a.days_outside} of the last 3 days, ` : "";
-  return `<li><b>${label}</b> was ${a.direction} — ${value} ${unit} vs. usual ${usual} ${unit} (${days}severity: ${a.severity}) <i>on ${a.date}</i>${past}</li>`;
+  return `<li><b>${label}</b> was ${a.direction} — ${value} vs. usual ${usual} (${days}severity: ${a.severity}) <i>on ${a.date}</i>${past}</li>`;
+}
+
+/**
+ * Where this deployment lives, for a link back from the email.
+ *
+ * Vercel sets the production domain; self-hosted deployments set neither, and
+ * then no link is offered rather than a broken one. An alert read on a phone
+ * that says "open the dashboard" without saying where is asking someone to go
+ * and find a URL they may never have memorised.
+ */
+export function dashboardUrl(env: Record<string, string | undefined> = process.env): string | null {
+  const host = env.APP_URL || env.VERCEL_PROJECT_PRODUCTION_URL || env.VERCEL_URL;
+  if (!host) return null;
+  return /^https?:\/\//.test(host) ? host : `https://${host}`;
 }
 
 /**
@@ -163,9 +178,15 @@ export function renderAlertLine(a: AlertRecord, units: UnitSystem = "metric"): s
 export async function sendAlertEmail(petName: string, alerts: AlertRecord[], units: UnitSystem = "metric") {
   if (alerts.length === 0) return { sent: false };
   const lines = alerts.map((a) => renderAlertLine(a, units));
+  const url = dashboardUrl();
+  const link = url
+    ? `<a href="${url}">Open ${petName}'s dashboard</a> for the charts.`
+    : "Open your dashboard for the charts.";
   const sent = await sendEmail(
     `🐾 ${petName}: ${alerts.length} health ${alerts.length === 1 ? "alert" : "alerts"}`,
-    `<p>${petName}'s recent readings have shifted away from their baseline:</p><ul>${lines.join("")}</ul><p>Not a diagnosis — a nudge to look closer. Open the dashboard for charts.</p>`
+    `<p>${petName}'s recent readings have shifted away from their baseline:</p>` +
+      `<ul>${lines.join("")}</ul>` +
+      `<p>Not a diagnosis — a nudge to look closer. ${link}</p>`
   );
   return { sent };
 }

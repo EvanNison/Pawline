@@ -67,7 +67,8 @@ export default async function StatusPage() {
   // send" moments before the next run emailed exactly those rows — resolved
   // but undelivered alerts are still sent, on purpose.
   const [{ count: undelivered }] = await s`select count(*)::int as count from alerts
-    where emailed = false and acknowledged = false and muted = false`;
+    where emailed = false and acknowledged = false
+      and metric <> all(${settings.mutedMetrics})`;
   // Ask the notify layer itself rather than re-deriving the rule here: two
   // copies of "is email set up" would drift, and this page exists to be trusted.
   const channel = await emailChannel();

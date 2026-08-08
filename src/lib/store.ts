@@ -132,7 +132,13 @@ export async function writeReadings(petId: string, sourceId: string, readings: R
     await sql()`insert into daily_metrics (pet_id, date, metric, value, source_id, updated_at)
       values (${petId}, ${r.date}, ${r.metric}, ${r.value}, ${sourceId}, now())
       on conflict (pet_id, date, metric) do update set
-        value = excluded.value, source_id = excluded.source_id, updated_at = now()`;
+        value = excluded.value, source_id = excluded.source_id, updated_at = now()
+        -- A hand-logged reading is never overwritten by an automatic one. The
+        -- key excludes source_id, so a vendor's stale profile weight landing on
+        -- the same day silently replaced a measurement someone took on actual
+        -- scales -- health data destroyed with no trace. A later manual entry
+        -- still wins, because a person correcting themselves is deliberate.
+        where daily_metrics.source_id <> 'manual' or excluded.source_id = 'manual'`;
     written++;
   }
   return written;
@@ -180,7 +186,13 @@ export async function writeReadingsBulk(
     const chunk = rows.slice(i, i + chunkSize);
     await s`insert into daily_metrics ${s(chunk, "pet_id", "date", "metric", "value", "source_id")}
       on conflict (pet_id, date, metric) do update set
-        value = excluded.value, source_id = excluded.source_id, updated_at = now()`;
+        value = excluded.value, source_id = excluded.source_id, updated_at = now()
+        -- A hand-logged reading is never overwritten by an automatic one. The
+        -- key excludes source_id, so a vendor's stale profile weight landing on
+        -- the same day silently replaced a measurement someone took on actual
+        -- scales -- health data destroyed with no trace. A later manual entry
+        -- still wins, because a person correcting themselves is deliberate.
+        where daily_metrics.source_id <> 'manual' or excluded.source_id = 'manual'`;
     written += chunk.length;
   }
   return written;

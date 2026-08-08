@@ -39,8 +39,15 @@ const MIN_DAYS_FOR_AVERAGE = 5;
 /** Year-over-year shift, in the concerning direction, worth drawing attention to. */
 const FLAG_PCT = 15;
 
-/** Metrics worth putting in front of a vet, and which direction is the worrying one. */
-const REPORT_METRICS: { key: string; watch?: "high" | "low" }[] = [
+/**
+ * Metrics worth putting in front of a vet, and which direction is worrying.
+ *
+ * "both" matters: weight has no safe direction, and leaving it unwatched meant
+ * it could never be flagged while still counting as compared — so a report
+ * could say "no measurement shifted 15% or more" after an arbitrarily large
+ * weight change, which is exactly the change a vet would want named.
+ */
+const REPORT_METRICS: { key: string; watch: "high" | "low" | "both" }[] = [
   { key: "resting_heart_rate", watch: "high" },
   { key: "resting_respiratory_rate", watch: "high" },
   { key: "active_minutes", watch: "low" },
@@ -48,7 +55,7 @@ const REPORT_METRICS: { key: string; watch?: "high" | "low" }[] = [
   { key: "sleep_score", watch: "low" },
   { key: "sleep_interruptions", watch: "high" },
   { key: "scratching", watch: "high" },
-  { key: "weight" },
+  { key: "weight", watch: "both" },
 ];
 
 /** Mean over a half-open window, or null when too few days to be worth printing. */
@@ -120,7 +127,9 @@ export default async function ReportPage({
       const flagged =
         change !== null &&
         Math.abs(change) >= FLAG_PCT &&
-        ((m.watch === "high" && change > 0) || (m.watch === "low" && change < 0));
+        (m.watch === "both" ||
+          (m.watch === "high" && change > 0) ||
+          (m.watch === "low" && change < 0));
 
       return {
         key: m.key,

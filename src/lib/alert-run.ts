@@ -70,16 +70,20 @@ export async function raiseAndWithdrawAlerts(petId: string, today: string, muted
   // Applied after the send pass, in deliverPendingAlerts, so nothing pending is
   // destroyed before it has been reported.
   for (const metric of withdrawals) {
+    // Dismissed episodes are resolved too. Excluding them meant an alert the
+    // owner had silenced could never be recorded as recovered, so the dashboard
+    // went on saying the measurement "has not returned to its usual range"
+    // permanently -- an untrue statement about their pet, kept alive by the
+    // fact that they had asked to stop being shouted at.
+    //
+    // Resolution is evidence, not a display state: whether someone dismissed
+    // the warning has no bearing on whether the metric came back.
+    //
+    // Undelivered rows are resolved as well and still sent, because delivery
+    // does not filter on resolved and renderAlertLine then says "has since
+    // returned to normal" instead of reporting a condition already known ended.
     await s`update alerts set resolved = true, resolved_at = now()
-      where pet_id = ${petId} and metric = ${metric}
-        and acknowledged = false and resolved = false and emailed = true`;
-    // Undelivered rows are marked resolved too, and still sent: delivery does
-    // not filter on resolved, and renderAlertLine says "has since returned to
-    // normal" when it is set. Leaving them unresolved meant an alert the app
-    // had positive evidence had ended was emailed as though it were live.
-    await s`update alerts set resolved = true, resolved_at = now()
-      where pet_id = ${petId} and metric = ${metric}
-        and acknowledged = false and resolved = false and emailed = false`;
+      where pet_id = ${petId} and metric = ${metric} and resolved = false`;
   }
 }
 

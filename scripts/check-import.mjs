@@ -30,7 +30,7 @@ try {
   process.env.DATABASE_URL = `${direct}${sep}options=${encodeURIComponent(`-c search_path=${SCHEMA}`)}`;
 
   const { ensureSchema, sql } = await import("../src/lib/db.ts");
-  const { upsertPet, writeReadingsBulk } = await import("../src/lib/store.ts");
+  const { upsertPet, writeReadings, writeReadingsBulk } = await import("../src/lib/store.ts");
   const { parseCsv, CsvSource, summarizeImport } = await import("../src/lib/sources/csv.ts");
   await ensureSchema();
 
@@ -237,6 +237,47 @@ try {
     group by m.metric`);
   check("a pet with no readings is not masked by one that has them",
     fresh.newest === null, `got ${fresh.newest} -- one pet's data hid the other's silence`);
+
+  // A hand-logged measurement must survive an automatic one landing on the
+  // same day. The uniqueness key excludes source_id, so a vendor's stale
+  // profile weight silently replaced a number someone read off actual scales.
+  await upsertPet("csv", { key: "Scales", name: "Scales", species: "dog", timezone: "UTC",
+    capabilities: ["weight"] }, "UTC");
+  await writeReadings("csv:Scales", "manual", [
+    { petKey: "Scales", date: "2026-08-01", metric: "weight", value: 14600 },
+  ]);
+  await writeReadings("csv:Scales", "tractive", [
+    { petKey: "Scales", date: "2026-08-01", metric: "weight", value: 99999 },
+  ]);
+  const [kept] = await admin.unsafe(
+    `select value, source_id from ${SCHEMA}.daily_metrics
+     where pet_id = 'csv:Scales' and date = '2026-08-01' and metric = 'weight'`
+  );
+  check("an automatic reading cannot overwrite a hand-logged one",
+    Number(kept.value) === 14600 && kept.source_id === "manual",
+    `stored ${kept.value} from ${kept.source_id}`);
+
+  await writeReadings("csv:Scales", "manual", [
+    { petKey: "Scales", date: "2026-08-01", metric: "weight", value: 14800 },
+  ]);
+  const [corrected] = await admin.unsafe(
+    `select value from ${SCHEMA}.daily_metrics
+     where pet_id = 'csv:Scales' and date = '2026-08-01' and metric = 'weight'`
+  );
+  check("but a person correcting themselves still wins",
+    Number(corrected.value) === 14800, `stored ${corrected.value}`);
+
+  // A dismissed episode must still be recordable as recovered, or the dashboard
+  // says the measurement never came back, forever.
+  await admin.unsafe(
+    `update ${SCHEMA}.alerts set acknowledged = true where pet_id = 'csv:Alert'`
+  );
+  await raiseAndWithdrawAlerts("csv:Alert", today, []);
+  const [dismissedRow] = await admin.unsafe(
+    `select resolved from ${SCHEMA}.alerts where pet_id = 'csv:Alert' limit 1`
+  );
+  check("a dismissed alert can still be resolved on evidence",
+    dismissedRow !== undefined, "no alert row found");
 
   // The gate that protects someone's subscription, proved against a real
   // database rather than a mock. Setting the enabled flag alone must not be

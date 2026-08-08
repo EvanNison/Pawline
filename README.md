@@ -90,8 +90,11 @@ Working, and verified against a real Postgres:
 
 Not there yet:
 
-- [ ] **Never run against a real tracker account for a sustained period.** The
-      analysis is proven on synthetic data only. This is the big one
+- [ ] **Not yet run against a real tracker account for a sustained period.**
+      The Tractive adapter has been verified once against a live account: 26 of
+      26 metrics matched a second, independent implementation across two days.
+      But nothing has run for weeks on end, which is what alerting actually
+      depends on
 - [ ] Statistical calibration, as above
 - [ ] EU Data Act importer, and chunked backfill of a long vendor history.
       `src/lib/importer.ts` is written and tested but nothing calls it yet

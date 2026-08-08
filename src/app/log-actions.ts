@@ -11,6 +11,20 @@ import { localDate } from "@/lib/time";
 export type LogResult = { ok: boolean; message: string } | null;
 
 /**
+ * Today's date in the pet's own timezone, or null if there is no such pet.
+ *
+ * The pet id arrives from a hidden form field, so it can be stale — the pet
+ * deleted, or the page open since before a reset. Destructuring the row
+ * directly turned that into "Cannot destructure property 'timezone' of
+ * undefined", a 500 where a sentence belongs.
+ */
+async function dateForPet(petId: string, fallbackTz: string): Promise<string | null> {
+  const [row] = await sql()`select timezone from pets where id = ${petId}`;
+  if (!row) return null;
+  return localDate(String(row.timezone ?? fallbackTz));
+}
+
+/**
  * Log a weight by hand.
  *
  * Weight is the measurement vets ask about most and the one almost no collar
@@ -34,8 +48,8 @@ export async function logWeight(_prev: LogResult, formData: FormData): Promise<L
 
   await ensureSchema();
   const settings = await readSettings();
-  const [{ timezone }] = await sql()`select timezone from pets where id = ${petId}`;
-  const date = localDate(String(timezone ?? settings.timezone));
+  const date = await dateForPet(petId, settings.timezone);
+  if (date === null) return { ok: false, message: "That pet no longer exists — reload the page." };
 
   await writeReadings(petId, "manual", [
     { petKey: petId, date, metric: "weight", value: toCanonical(n, "mass", settings.units) },
@@ -64,8 +78,8 @@ export async function logNote(_prev: LogResult, formData: FormData): Promise<Log
 
   await ensureSchema();
   const settings = await readSettings();
-  const [{ timezone }] = await sql()`select timezone from pets where id = ${petId}`;
-  const date = localDate(String(timezone ?? settings.timezone));
+  const date = await dateForPet(petId, settings.timezone);
+  if (date === null) return { ok: false, message: "That pet no longer exists — reload the page." };
 
   await sql()`insert into journal (pet_id, date, category, note)
     values (${petId}, ${date}, ${category}, ${note.slice(0, 2000)})`;

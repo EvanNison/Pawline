@@ -119,6 +119,14 @@ Not done:
       Deliberately left out rather than shipped empty.
 - [ ] Statistical calibration: no measured false-alert rate, no detection-delay
       figure, no handling of seasonality or day-to-day autocorrelation
+- [ ] Species and timezone are one setting for the whole install, not per pet.
+      A mixed-species household cannot configure them separately.
+- [ ] A stored Gmail App Password cannot be deleted from the UI. Clearing the
+      username stops sending, but the credential stays in the database until
+      you remove the row yourself.
+- [ ] The trends page says slow drifts "show up here long before they are
+      visible day to day". That is the intent, not a measured result — see the
+      calibration gap above.
 
 ## Development
 

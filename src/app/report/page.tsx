@@ -150,8 +150,9 @@ export default async function ReportPage({
         <div>
           <h1 className="text-xl font-bold sm:text-2xl">🩺 Health trend report — {pet.name}</h1>
           <p className="text-sm text-zinc-500">
-            Generated {today} · {settings.units} units · from a consumer activity tracker,
-            recorded daily
+            Generated {today} · {settings.units} units · from a consumer activity
+            tracker. Coverage varies by measurement; each average below states how
+            many days it was computed from.
           </p>
         </div>
         <div className="flex flex-wrap gap-1.5 print:hidden">

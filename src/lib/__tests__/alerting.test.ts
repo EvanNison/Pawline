@@ -116,33 +116,47 @@ test("a deviation that ends stops being detected", () => {
   assert.equal(shouldWithdraw(series, false, day(64), "high_bad"), true);
 });
 test("a resolved alert is never shown as a current warning", () => {
-  const today = "2026-08-20";
-  const base = { date: today, emailed: false, acknowledged: false, resolved: true };
-  assert.equal(isAlertVisible(base, today), false, "even when recent and undelivered");
-  assert.equal(isAlertVisible({ ...base, emailed: true }, today), false);
+  const base = { date: "2026-08-20", emailed: false, acknowledged: false, resolved: true };
+  assert.equal(isAlertVisible(base), false, "even when recent and undelivered");
+  assert.equal(isAlertVisible({ ...base, emailed: true }), false);
 });
 
-test("recent alerts are shown; old delivered ones age off", () => {
-  const today = "2026-08-20";
+// This test used to assert the opposite, and the behaviour it protected was
+// this project's worst bug: an episode keeps the date it began, so a condition
+// still detected and still unresolved vanished after fourteen days and the
+// dashboard went green over it.
+test("an unresolved alert stays visible however old it is", () => {
   const live = { emailed: true, acknowledged: false, resolved: false };
-  assert.equal(isAlertVisible({ ...live, date: "2026-08-20" }, today), true);
-  assert.equal(isAlertVisible({ ...live, date: "2026-08-06" }, today), true, "14 days is inside");
-  assert.equal(isAlertVisible({ ...live, date: "2026-08-05" }, today), false, "15 days is out");
+  assert.equal(isAlertVisible({ ...live, date: "2026-08-20" }), true);
+  assert.equal(isAlertVisible({ ...live, date: "2026-08-06" }), true);
+  assert.equal(
+    isAlertVisible({ ...live, date: "2025-01-01" }),
+    true,
+    "a year-old episode that never resolved is still happening"
+  );
+});
+
+test("resolution is what ends a warning, on evidence", () => {
+  assert.equal(
+    isAlertVisible({ date: "2026-08-20", emailed: true, acknowledged: false, resolved: true }),
+    false
+  );
 });
 
 test("an undelivered alert is visible at any age", () => {
   // The whole point: nothing may be both impossible to deliver and invisible.
-  const today = "2026-08-20";
   const undelivered = { date: "2025-01-01", emailed: false, acknowledged: false, resolved: false };
-  assert.equal(isAlertVisible(undelivered, today), true);
+  assert.equal(isAlertVisible(undelivered), true);
 });
 
 test("a dismissed alert does not return through the undelivered clause", () => {
   const today = "2026-08-20";
   const dismissed = { date: "2025-01-01", emailed: false, acknowledged: true, resolved: false };
-  assert.equal(isAlertVisible(dismissed, today), false);
-  // ...but dismissing a recent one still hides it only after the display window.
-  assert.equal(isAlertVisible({ ...dismissed, date: today }, today), true, "recent rows show regardless; the panel greys them out");
+  assert.equal(isAlertVisible(dismissed), false);
+  // Dismissing a recent one hides it immediately too. The dashboard separately
+  // refuses to show a green tick while any dismissed alert is still unresolved,
+  // so silencing a warning cannot be mistaken for the condition ending.
+  assert.equal(isAlertVisible({ ...dismissed, date: today }), false);
 });
 
 // -------------------------------------------- reported by external review
@@ -172,10 +186,10 @@ test("sufficient-history counts the right window, not raw rows", () => {
   assert.equal(hasSufficientHistory([]), false);
 });
 
-test("recent alerts show; old delivered ones age off", () => {
-  const today = "2026-08-20";
+test("age alone never hides an open episode", () => {
   const live = { emailed: true, acknowledged: false, resolved: false };
-  assert.equal(isAlertVisible({ ...live, date: "2026-08-06" }, today), true, "14 days is inside");
-  assert.equal(isAlertVisible({ ...live, date: "2026-08-05" }, today), false, "15 days is out");
+  for (const date of ["2026-08-06", "2026-08-05", "2024-01-01"]) {
+    assert.equal(isAlertVisible({ ...live, date }), true, `${date} must remain visible`);
+  }
 });
 

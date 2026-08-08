@@ -135,18 +135,42 @@ export default async function StatusPage() {
   // Credential protection and schema state: reported, not assumed. "Still
   // plaintext" and "migrations behind" are both states nobody notices.
   const keySet = Boolean(encryptionKey());
-  const storedEncrypted = creds ? String(creds.value).startsWith("enc:") : false;
+  // EVERY stored secret, not just the Tractive login. A Gmail App Password goes
+  // through the same protect() call, which returns plaintext when no key is
+  // set — so checking only the Tractive row could report "nothing stored yet"
+  // or "encrypted" while a real Google credential sat in the clear. A false
+  // statement about where someone's password lives is the worst kind here.
+  const secretRows = await s`select key, value from app_config
+    where key like 'source:%:credentials' or key in ('gmail_app_password', 'resend_api_key')`;
+  const storedSecrets = secretRows.length;
+  const plaintextSecrets = secretRows.filter((r) => !String(r.value).startsWith("enc:")).length;
+  const storedEncrypted = storedSecrets > 0 && plaintextSecrets === 0;
   const schema = await schemaState();
   checks.splice(
     checks.findIndex((c) => c.id === "credentials") + 1,
     0,
-    !creds
+    storedSecrets === 0
       ? { id: "encryption", label: "Stored password protection", level: "unknown", detail: "Nothing stored yet." }
       : storedEncrypted
-        ? { id: "encryption", label: "Stored password protection", level: "ok", detail: "Saved credentials are encrypted." }
+        ? {
+            id: "encryption",
+            label: "Stored password protection",
+            level: "ok",
+            detail: `All ${storedSecrets} saved credential${storedSecrets === 1 ? " is" : "s are"} encrypted.`,
+          }
         : keySet
-          ? { id: "encryption", label: "Stored password protection", level: "warn", detail: "Encryption is configured but this credential predates it; it will be upgraded on the next collection." }
-          : { id: "encryption", label: "Stored password protection", level: "warn", detail: "Credentials are stored in plain text. Set an ENCRYPTION_KEY to protect them." },
+          ? {
+              id: "encryption",
+              label: "Stored password protection",
+              level: "warn",
+              detail: `${plaintextSecrets} of ${storedSecrets} saved credential${storedSecrets === 1 ? "" : "s"} predate${plaintextSecrets === 1 ? "s" : ""} encryption and ${plaintextSecrets === 1 ? "is" : "are"} still in plain text; the next collection upgrades ${plaintextSecrets === 1 ? "it" : "them"}.`,
+            }
+          : {
+              id: "encryption",
+              label: "Stored password protection",
+              level: "warn",
+              detail: `${plaintextSecrets} saved credential${plaintextSecrets === 1 ? "" : "s"} — which may include a Google App Password — ${plaintextSecrets === 1 ? "is" : "are"} stored in plain text. Set ENCRYPTION_KEY to protect ${plaintextSecrets === 1 ? "it" : "them"}.`,
+            },
     schema.current === schema.expected
       ? { id: "schema", label: "Database", level: "ok", detail: `Up to date (version ${schema.current}).` }
       : { id: "schema", label: "Database", level: "bad", detail: `Migrations are behind: at version ${schema.current}, expected ${schema.expected}. Data may not save correctly.` }

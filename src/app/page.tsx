@@ -122,24 +122,20 @@ export default async function Home({
   const alertRows = await s`select id, date::text as date, metric, direction, value,
       baseline_median, severity, acknowledged, emailed, resolved, note, muted
     from alerts where pet_id = ${pet.id} order by date desc limit 200`;
-  // Dismissed alerts are excluded here, not merely de-emphasised. isAlertVisible
-  // deliberately keeps a recent row visible on the intent that the panel would
-  // grey it out; the panel never did, so a dismissed warning looked identical to
-  // a live one and pressing dismiss appeared to do nothing for a fortnight. The
-  // full record, dismissals included, is on /alerts where it belongs.
-  const visible = alertRows.filter(
-    (a) =>
-      !a.acknowledged &&
-      isAlertVisible(
-        {
-          date: a.date as string,
-          emailed: Boolean(a.emailed),
-          acknowledged: Boolean(a.acknowledged),
-          resolved: Boolean(a.resolved),
-        },
-        today
-      )
+  const visible = alertRows.filter((a) =>
+    isAlertVisible({
+      date: a.date as string,
+      emailed: Boolean(a.emailed),
+      acknowledged: Boolean(a.acknowledged),
+      resolved: Boolean(a.resolved),
+    })
   );
+
+  // Dismissing silences a warning; it does not end the condition. Counting
+  // these separately is what stops the page going green over an episode the
+  // app still believes is running — the owner asked not to be shouted at, not
+  // to be told everything is fine.
+  const dismissedButOpen = alertRows.filter((a) => a.acknowledged && !a.resolved).length;
 
   return (
     <main className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
@@ -162,11 +158,11 @@ export default async function Home({
               </Link>
             ))}
           <Link href={`/alerts?pet=${encodeURIComponent(pet.id)}`} className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">🔔 Alerts</Link>
-          <Link href="/status" className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">🩹 Status</Link>
-          <Link href="/trends" className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">📈 Trends</Link>
-          <Link href="/report" className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">🩺 Vet report</Link>
-          <Link href="/import" className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">📄 Import</Link>
-          <Link href="/setup" className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">⚙️ Setup</Link>
+          <Link href={`/status?pet=${encodeURIComponent(pet.id)}`} className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">🩹 Status</Link>
+          <Link href={`/trends?pet=${encodeURIComponent(pet.id)}`} className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">📈 Trends</Link>
+          <Link href={`/report?pet=${encodeURIComponent(pet.id)}`} className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">🩺 Vet report</Link>
+          <Link href={`/import?pet=${encodeURIComponent(pet.id)}`} className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">📄 Import</Link>
+          <Link href={`/setup?pet=${encodeURIComponent(pet.id)}`} className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">⚙️ Setup</Link>
         </nav>
       </header>
 
@@ -186,6 +182,14 @@ export default async function Home({
             ⏳ Not enough history to judge anything yet — a baseline needs about three
             weeks of readings per measurement. This is not a statement that everything
             is normal.
+          </section>
+        ) : dismissedButOpen > 0 ? (
+          <section className="rounded-xl border border-zinc-300 bg-zinc-50 p-4 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+            🔕 {dismissedButOpen} alert{dismissedButOpen === 1 ? "" : "s"} you dismissed{" "}
+            {dismissedButOpen === 1 ? "is" : "are"} still open — the measurement has not
+            returned to its usual range. Nothing new is being flagged, which is not the
+            same as everything being normal.{" "}
+            <Link href={`/alerts?pet=${encodeURIComponent(pet.id)}`} className="underline">See alerts</Link>.
           </section>
         ) : (
           <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">

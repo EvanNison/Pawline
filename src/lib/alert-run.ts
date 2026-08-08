@@ -104,7 +104,8 @@ export async function deliverPendingAlerts(
   // was created with — and muting a noisy measurement did not stop the email
   // already waiting to go out, which is exactly the case someone mutes for.
   const pending = await s`select a.id, a.date::text as date, a.metric, a.direction, a.value,
-      a.baseline_median, a.severity, a.days_outside, a.note, a.resolved, p.name as pet
+      a.baseline_median, a.severity, a.days_outside, a.note, a.resolved,
+      a.pet_id, p.name as pet
     from alerts a join pets p on p.id = a.pet_id
     where a.emailed = false and a.acknowledged = false
       and a.metric <> all(${muted})
@@ -116,15 +117,20 @@ export async function deliverPendingAlerts(
   // whichever pet happened to sort first, so in a two-animal household an alert
   // about one arrived under the other's name — and the whole point of the email
   // is to tell you which animal to look at.
+  // Grouped by pet id, not by display name. Two animals can share a name --
+  // and grouping on the name merged them into one email whose lines carry no
+  // identity at all, which is the same wrong-animal failure this grouping was
+  // introduced to fix.
   const byPet = new Map<string, typeof pending>();
   for (const row of pending) {
-    const name = String(row.pet ?? "your pet");
-    const list = byPet.get(name);
+    const id = String(row.pet_id);
+    const list = byPet.get(id);
     if (list) list.push(row);
-    else byPet.set(name, [row] as typeof pending);
+    else byPet.set(id, [row] as typeof pending);
   }
 
-  for (const [petName, rows] of byPet) {
+  for (const rows of byPet.values()) {
+    const petName = String(rows[0].pet ?? "your pet");
     const records: AlertRecord[] = rows.map((a) => ({
       id: Number(a.id),
       date: a.date as string,

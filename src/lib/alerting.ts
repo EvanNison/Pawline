@@ -129,11 +129,20 @@ export const ALERT_DISPLAY_DAYS = 14;
  *    impossible to deliver and impossible to see.
  *  - dismissed: the user has spoken; it does not come back via that clause.
  */
-export function isAlertVisible(a: AlertVisibility, today: string): boolean {
+export function isAlertVisible(a: AlertVisibility): boolean {
+  // Only two things end a warning: evidence the metric recovered, or the owner
+  // saying they have seen it. NOT the calendar.
+  //
+  // Ageing off after a fixed window looked reasonable and was the project's
+  // own worst failure: an episode keeps the date it started, so a condition
+  // still being detected and still unresolved vanished from the dashboard
+  // fourteen days later and the page went green underneath it. "Silence is
+  // never good news" is the rule this app is built on, and a display window
+  // quietly broke it.
+  //
+  // An old undelivered alert therefore also stays visible, which was already
+  // the intent: nothing may be both impossible to deliver and impossible to
+  // see. The withdrawal pass is what ends an episode, on evidence.
   if (a.resolved) return false;
-  const age = Math.round(
-    (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${a.date}T00:00:00Z`)) / 86_400_000
-  );
-  if (age <= ALERT_DISPLAY_DAYS) return true;
-  return !a.emailed && !a.acknowledged;
+  return !a.acknowledged;
 }

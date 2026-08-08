@@ -22,6 +22,12 @@ import {
 import { TRACTIVE_SOURCE_INFO } from "./registry";
 import type { Reading, Source, SourcePet } from "./types";
 
+/** Map a vendor species string onto the registry's values. */
+function normalizeSpecies(raw: unknown): "dog" | "cat" | "unknown" {
+  const v = String(raw ?? "").trim().toLowerCase();
+  return v === "dog" || v === "cat" ? v : "unknown";
+}
+
 const GRAPH = "https://graph.tractive.com/4";
 const APS = "https://aps-api.tractive.com/api/1";
 const CLIENT_ID = process.env.TRACTIVE_CLIENT_ID || "625e533dc3c3b41c28a669f0";
@@ -146,7 +152,11 @@ export class TractiveSource implements Source {
         name: (inner.name as string) || (details?.name as string) || obj._id,
         // The vendor models pets by species elsewhere; absent that, say unknown
         // rather than assuming dog, so cat-inapplicable metrics stay hidden.
-        species: (inner.pet_type as "dog" | "cat") ?? "unknown",
+        // Lowercased: the vendor returns "DOG", the registry stores "dog", and
+        // an exact-match filter then hid every chart for a real account while
+        // the data sat in the table. Anything unrecognised becomes "unknown",
+        // which shows all metrics rather than none.
+        species: normalizeSpecies(inner.pet_type),
         timezone: this.timezone,
         capabilities: capabilitiesToMetrics(caps),
       });

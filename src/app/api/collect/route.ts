@@ -4,7 +4,7 @@ import { readSettings } from "@/lib/settings";
 import { upgradeStoredSecrets } from "@/lib/secrets";
 import { scheduledSources } from "@/lib/sources/registry";
 import { datesToCollect, runOutcome } from "@/lib/collector";
-import { finishRun, listPets, startRun, storedDays, upsertPet, writeReadings } from "@/lib/store";
+import { addCapability, finishRun, listPets, startRun, storedDays, upsertPet, writeReadings } from "@/lib/store";
 import { addDays, dayRangeEpoch, localDate } from "@/lib/time";
 import { deliverPendingAlerts, raiseAndWithdrawAlerts } from "@/lib/alert-run";
 
@@ -86,11 +86,13 @@ export async function GET(req: NextRequest) {
           });
 
           const written = new Set<string>();
+          const collected = new Set<string>();
           for (const date of dates) {
             const readings = await source.fetchDay(pet.key, date);
             if (readings.length > 0) {
               await writeReadings(petId, source.info.id, readings);
               written.add(date);
+              for (const r of readings) collected.add(r.metric);
             }
           }
           // Values that describe the pet now rather than a past day — the
@@ -101,12 +103,23 @@ export async function GET(req: NextRequest) {
           if (source.fetchCurrent) {
             try {
               const current = await source.fetchCurrent(pet.key, today);
-              if (current.length > 0) await writeReadings(petId, source.info.id, current);
+              if (current.length > 0) {
+                await writeReadings(petId, source.info.id, current);
+                for (const r of current) await addCapability(petId, r.metric);
+              }
             } catch (e) {
               // A profile read failing must not lose the day's collected data.
               console.error("[collect] current-value fetch failed:", String(e).slice(0, 200));
             }
           }
+
+          // Credit the pet with every metric that actually arrived. Adapters
+          // declare capabilities from what the device advertises, and a real
+          // Tractive collar returned sleep, heart rate and respiratory data
+          // while advertising none of it — so the dashboard filtered all of it
+          // back out and showed nothing. What a tracker demonstrably produces
+          // is better evidence than what it claims to support.
+          for (const key of collected) await addCapability(petId, key);
 
           daysWritten += written.size;
 

@@ -237,7 +237,14 @@ export function metric(key: string): MetricDef | undefined {
 /** Metrics meaningful for a species AND supported by that pet's hardware. */
 export function availableMetrics(species: Species, capabilities: string[]): MetricDef[] {
   const cap = new Set(capabilities);
-  return REGISTRY.filter((m) => cap.has(m.key) && (species === "unknown" || m.species.includes(species)));
+  // Species is compared case-insensitively, and an unrecognised value shows
+  // everything rather than nothing. A vendor returning "DOG" against a registry
+  // storing "dog" hid every chart on a real account while the readings sat in
+  // the table — failing open is the right direction for a filter whose only job
+  // is to hide charts that would be empty anyway.
+  const sp = String(species ?? "").trim().toLowerCase();
+  const known = sp === "dog" || sp === "cat";
+  return REGISTRY.filter((m) => cap.has(m.key) && (!known || m.species.includes(sp as Species)));
 }
 
 /** True if `key` names a metric an adapter is allowed to emit. */

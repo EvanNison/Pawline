@@ -79,7 +79,6 @@ export const MIGRATIONS: Migration[] = [
         resolved_at       timestamptz,
         -- Delivery was given up on. Distinct from "emailed", which must only
         -- ever mean a message genuinely went out.
-        abandoned         boolean not null default false,
         -- Notifications for this metric are muted. Detection still ran and the
         -- row still exists: a mute that suppressed the row would make a
         -- suppressed detection invisible, which is the bug class this project

@@ -57,7 +57,7 @@ export default async function StatusPage() {
   const [{ count: petCount }] = await s`select count(*)::int as count from pets`;
   const [creds] = await s`select value from app_config where key = 'source:tractive:credentials'`;
   const [{ count: undelivered }] = await s`select count(*)::int as count from alerts
-    where emailed = false and acknowledged = false and abandoned = false and muted = false`;
+    where emailed = false and acknowledged = false and resolved = false and muted = false`;
   // Ask the notify layer itself rather than re-deriving the rule here: two
   // copies of "is email set up" would drift, and this page exists to be trusted.
   const channel = await emailChannel();

@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/session";
 import Link from "next/link";
 import NotConfigured from "@/components/NotConfigured";
@@ -16,6 +17,28 @@ function statusOf(a: { acknowledged: boolean; resolved: boolean; emailed: boolea
   if (a.muted) return { word: "active — notifications muted", tone: "text-zinc-500" };
   if (!a.emailed) return { word: "active — not yet sent", tone: "text-amber-700 dark:text-amber-300" };
   return { word: "active", tone: "text-red-700 dark:text-red-300" };
+}
+
+/**
+ * Dismiss an alert.
+ *
+ * `acknowledged` governs the whole alert lifecycle — visibility, whether a
+ * repeat episode raises a fresh row, whether the withdrawal pass may touch it —
+ * and until now nothing could set it. The alerts page rendered a "dismissed by
+ * you" state that no owner could ever reach, and an alert stayed live until it
+ * happened to resolve itself.
+ *
+ * Deliberately not a delete. The record is what the vet conversation is built
+ * on: "flagged three times since June" needs the three.
+ */
+async function acknowledgeAlert(formData: FormData) {
+  "use server";
+  await requireSession();
+  const id = Number(formData.get("id"));
+  if (!Number.isFinite(id)) return;
+  await sql()`update alerts set acknowledged = true where id = ${id}`;
+  revalidatePath("/alerts");
+  revalidatePath("/");
 }
 
 export default async function AlertsPage({
@@ -52,7 +75,7 @@ export default async function AlertsPage({
   const pet = pets.find((p) => p.id === params.pet) ?? pets[0];
   const today = localDate(pet.timezone);
 
-  const rows = await s`select date::text as date, metric, direction, value, baseline_median,
+  const rows = await s`select id, date::text as date, metric, direction, value, baseline_median,
       severity, days_outside, note, acknowledged, resolved, emailed, muted
     from alerts where pet_id = ${pet.id} order by date desc limit 500`;
   const truncated = rows.length === 500;
@@ -141,7 +164,15 @@ export default async function AlertsPage({
                   <li key={i} className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800">
                     <div className="flex items-baseline justify-between gap-2">
                       <b>{label(a.metric as string)}</b>
-                      <span className="shrink-0 text-xs text-zinc-500">{String(a.date)}</span>
+                      <span className="flex shrink-0 items-baseline gap-2">
+                        <span className="text-xs text-zinc-500">{String(a.date)}</span>
+                        {!a.acknowledged && (
+                          <form action={acknowledgeAlert}>
+                            <input type="hidden" name="id" value={String(a.id)} />
+                            <button className="text-xs text-zinc-500 underline">dismiss</button>
+                          </form>
+                        )}
+                      </span>
                     </div>
                     {a.note ? <p className="mt-1 text-xs text-zinc-500">{String(a.note)}</p> : null}
                     <p className="mt-1">
@@ -157,7 +188,7 @@ export default async function AlertsPage({
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="border-b border-zinc-300 text-xs text-zinc-500">
-                    <th className="py-1">Started</th><th>Measurement</th><th>At the time</th><th>Usual</th><th>Severity</th><th>Since</th>
+                    <th className="py-1">Started</th><th>Measurement</th><th>At the time</th><th>Usual</th><th>Severity</th><th>Since</th><th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -171,6 +202,16 @@ export default async function AlertsPage({
                         <td>{show(a.metric as string, a.baseline_median)}</td>
                         <td>{String(a.severity)}</td>
                         <td className={st.tone}>{st.word}</td>
+                        <td>
+                          {!a.acknowledged && (
+                            <form action={acknowledgeAlert}>
+                              <input type="hidden" name="id" value={String(a.id)} />
+                              <button className="text-xs text-zinc-500 underline hover:text-zinc-800 dark:hover:text-zinc-200">
+                                dismiss
+                              </button>
+                            </form>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}

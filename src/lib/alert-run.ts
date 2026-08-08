@@ -39,15 +39,23 @@ export async function raiseAndWithdrawAlerts(petId: string, today: string, muted
       // One row per episode, not one per day of it: an ongoing condition moves
       // its date forward daily, which would otherwise mean a fresh alert and a
       // fresh email every run.
+      // Dismissed episodes count as open. Excluding them meant a condition the
+      // owner had silenced, but which never went away, produced a brand new row
+      // on the next run -- so one uninterrupted episode became "flagged three
+      // times" in the history a vet reads, and sent another email. Silencing a
+      // warning does not start a new illness.
       const [open] = await s`select id from alerts
-        where pet_id = ${petId} and metric = ${def.key}
-          and acknowledged = false and resolved = false
+        where pet_id = ${petId} and metric = ${def.key} and resolved = false
         order by date asc limit 1`;
       if (open) {
         // `muted` is refreshed too. Copying it only at insert meant muting a
         // measurement never silenced an episode already open, and unmuting one
         // never un-silenced it — the setting appeared to do nothing, or
         // silently kept suppressing after being turned off.
+        // onset_value and onset_baseline are deliberately NOT updated: the row
+        // keeps the date the episode began, and overwriting the readings from
+        // that day left the latest numbers sitting under a column labelled "at
+        // the time". The start-of-episode figures cannot be recovered later.
         await s`update alerts set direction = ${dev.direction}, value = ${dev.value},
             baseline_median = ${dev.baseline.median}, baseline_spread = ${dev.baseline.smad},
             severity = ${dev.severity}, days_outside = ${dev.daysOutside},
@@ -56,10 +64,11 @@ export async function raiseAndWithdrawAlerts(petId: string, today: string, muted
       } else {
         await s`insert into alerts
           (pet_id, date, metric, direction, value, baseline_median, baseline_spread,
-           severity, days_outside, muted)
+           severity, days_outside, muted, onset_value, onset_baseline)
           values (${petId}, ${dev.date}, ${def.key}, ${dev.direction}, ${dev.value},
                   ${dev.baseline.median}, ${dev.baseline.smad}, ${dev.severity},
-                  ${dev.daysOutside}, ${muted.includes(def.key)})
+                  ${dev.daysOutside}, ${muted.includes(def.key)},
+                  ${dev.value}, ${dev.baseline.median})
           on conflict (pet_id, date, metric) do nothing`;
       }
     } else if (shouldWithdraw(series, dev !== null, today, def.direction)) {
@@ -107,8 +116,12 @@ export async function deliverPendingAlerts(
   // so a queued alert for a metric that has since settled kept whatever value it
   // was created with — and muting a noisy measurement did not stop the email
   // already waiting to go out, which is exactly the case someone mutes for.
-  const pending = await s`select a.id, a.date::text as date, a.metric, a.direction, a.value,
-      a.baseline_median, a.severity, a.days_outside, a.note, a.resolved,
+  // Onset figures, because the line is dated with the episode's start. Quoting
+  // today's numbers under that date was the same mislabelling as the table.
+  const pending = await s`select a.id, a.date::text as date, a.metric, a.direction,
+      coalesce(a.onset_value, a.value) as value,
+      coalesce(a.onset_baseline, a.baseline_median) as baseline_median,
+      a.severity, a.days_outside, a.note, a.resolved,
       a.pet_id, p.name as pet
     from alerts a join pets p on p.id = a.pet_id
     where a.emailed = false and a.acknowledged = false

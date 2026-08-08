@@ -267,6 +267,29 @@ try {
   check("but a person correcting themselves still wins",
     Number(corrected.value) === 14800, `stored ${corrected.value}`);
 
+  // Dismissing must not split one continuous episode into several. The runner
+  // used to look only for UNacknowledged open alerts, so a condition the owner
+  // had silenced -- and which never went away -- produced a fresh row on the
+  // next run, turning one illness into "flagged three times" in the history a
+  // vet reads, and sending another email.
+  const [beforeDismiss] = await admin.unsafe(
+    `select count(*)::int as n from ${SCHEMA}.alerts where pet_id = 'csv:Alert'`
+  );
+  await admin.unsafe(`update ${SCHEMA}.alerts set acknowledged = true where pet_id = 'csv:Alert'`);
+  await raiseAndWithdrawAlerts("csv:Alert", today, []);
+  const [afterDismiss] = await admin.unsafe(
+    `select count(*)::int as n from ${SCHEMA}.alerts where pet_id = 'csv:Alert'`
+  );
+  check("dismissing does not split one episode into two",
+    Number(afterDismiss.n) === Number(beforeDismiss.n),
+    `${beforeDismiss.n} rows became ${afterDismiss.n}`);
+
+  const [onset] = await admin.unsafe(
+    `select onset_value, value from ${SCHEMA}.alerts where pet_id = 'csv:Alert' limit 1`
+  );
+  check("the onset reading is recorded and kept",
+    onset.onset_value !== null, "onset_value is null");
+
   // A dismissed episode must still be recordable as recovered, or the dashboard
   // says the measurement never came back, forever.
   await admin.unsafe(

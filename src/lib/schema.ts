@@ -69,6 +69,12 @@ export const MIGRATIONS: Migration[] = [
         direction         text not null,
         value             double precision,
         baseline_median   double precision,
+        -- The reading and baseline as they were on the day the episode began.
+        -- The row keeps its start date while later runs refresh the current
+        -- figures, so without these the table showed today's numbers under a
+        -- column labelled "at the time" and the originals were unrecoverable.
+        onset_value       double precision,
+        onset_baseline    double precision,
         -- Written on every alert and not currently read anywhere. Kept because
         -- it is the figure that explains why a value counted as unusual, and
         -- recovering it later is impossible; do not read its presence as

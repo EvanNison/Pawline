@@ -76,6 +76,7 @@ export default async function AlertsPage({
   const today = localDate(pet.timezone);
 
   const rows = await s`select id, date::text as date, metric, direction, value, baseline_median,
+      onset_value, onset_baseline,
       severity, days_outside, note, acknowledged, resolved, emailed, muted
     from alerts where pet_id = ${pet.id} order by date desc limit 500`;
   const truncated = rows.length === 500;
@@ -180,8 +181,10 @@ export default async function AlertsPage({
                     </div>
                     {a.note ? <p className="mt-1 text-xs text-zinc-500">{String(a.note)}</p> : null}
                     <p className="mt-1">
-                      {show(a.metric as string, a.value)}
-                      <span className="text-zinc-500"> vs. usual {show(a.metric as string, a.baseline_median)}</span>
+                      {show(a.metric as string, a.onset_value ?? a.value)}
+                      <span className="text-zinc-500">
+                        {" "}vs. usual {show(a.metric as string, a.onset_baseline ?? a.baseline_median)}
+                      </span>
                     </p>
                     <p className={`mt-1 text-xs ${st.tone}`}>{st.word}</p>
                   </li>
@@ -202,8 +205,8 @@ export default async function AlertsPage({
                       <tr key={i} className="border-b border-zinc-100 align-top dark:border-zinc-800">
                         <td className="py-1.5 whitespace-nowrap">{String(a.date)}</td>
                         <td>{label(a.metric as string)}{a.note ? <div className="text-xs text-zinc-500">{String(a.note)}</div> : null}</td>
-                        <td>{show(a.metric as string, a.value)}</td>
-                        <td>{show(a.metric as string, a.baseline_median)}</td>
+                        <td>{show(a.metric as string, a.onset_value ?? a.value)}</td>
+                        <td>{show(a.metric as string, a.onset_baseline ?? a.baseline_median)}</td>
                         <td>{String(a.severity)}</td>
                         <td className={st.tone}>{st.word}</td>
                         <td>

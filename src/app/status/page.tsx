@@ -87,6 +87,22 @@ export default async function StatusPage() {
   // alone silently did nothing and a pet with no readings kept being masked by
   // one that had them. Verified against a real server, not reasoned about —
   // this is the third attempt at this one bug.
+  // Every pet with a history import on the go, so the fill-in is visible.
+  const backfillRows = await s`select p.name, j.state, j.days_done, j.days_with_data,
+      j.cursor_date::text as cursor_date, j.earliest_date::text as earliest_date,
+      j.finished_reason, j.last_error
+    from import_jobs j join pets p on p.id = j.pet_id`;
+  const backfills = backfillRows.map((r) => ({
+    pet: String(r.name),
+    done: r.state === "done",
+    summary:
+      r.state === "done"
+        ? `Finished — ${r.days_with_data} days of history${r.earliest_date ? `, back to ${r.earliest_date}` : ""}.${r.finished_reason ? ` (${r.finished_reason})` : ""}`
+        : r.last_error
+          ? `Paused after ${r.days_done} days: ${String(r.last_error).slice(0, 120)}. It resumes on the next run.`
+          : `Importing history — ${r.days_done} days walked so far, now at ${r.cursor_date ?? "the start"}. A little more each night.`,
+  }));
+
   const [{ count: wearRowCount }] = await s`select count(*)::int as count
     from daily_metrics where metric = 'wear_time'`;
 
@@ -127,6 +143,7 @@ export default async function StatusPage() {
     credentialsPresent: Boolean(creds) && credsUsable,
     credentialsUnreadable: Boolean(creds) && !credsUsable,
     wearMeasured: Number(wearRowCount) > 0,
+    backfills,
     scheduledSources: (await scheduledSources()).length,
     petCount: Number(petCount),
   });

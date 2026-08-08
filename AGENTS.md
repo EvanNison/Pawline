@@ -49,6 +49,20 @@ If they would rather not accept that risk, the **Import** page takes a
 spreadsheet from any tracker and carries no risk at all. Point them there first —
 it also gets them a working dashboard in a minute rather than overnight.
 
+## What to expect after they connect a tracker
+
+The first collection fetches about a week. It does **not** pull their whole
+history in one go, and that is not a bug: a vendor API cannot deliver two years
+inside one serverless request.
+
+History fills in backwards, a chunk per nightly run, and `/status` shows a
+"History import" line with how far back it has walked. Two years takes a few
+days. If they ask why they cannot see last year yet, that is the answer — point
+them at Status rather than changing anything.
+
+They can force it along by triggering a collection manually rather than waiting
+for the cron, if they have their `CRON_SECRET` to hand.
+
 ## Do not add health claims
 
 This app deliberately says what changed, never what it means. If you write copy,

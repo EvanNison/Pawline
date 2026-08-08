@@ -31,6 +31,7 @@ function input(over: Partial<StatusInput> = {}): StatusInput {
     scheduledSources: 1,
     credentialsUnreadable: false,
     wearMeasured: true,
+    backfills: [],
     undeliveredAlerts: 0,
     credentialsPresent: true,
     petCount: 1,
@@ -243,4 +244,22 @@ test("no wear data is reported as unknown, never as fine", () => {
   assert.equal(c.level, "unknown");
   assert.match(c.detail, /cannot be told apart/);
   assert.notEqual(overallLevel(buildStatus(input({ wearMeasured: false }))), "ok");
+});
+
+// A backfill in progress is indistinguishable from missing history unless the
+// page says which it is.
+test("a history import in progress is reported, not silent", () => {
+  const checks = buildStatus(
+    input({ backfills: [{ pet: "Rex", summary: "Importing history — 60 days walked so far.", done: false }] })
+  );
+  const c = checks.find((x) => x.id === "backfill:Rex")!;
+  assert.equal(c.level, "unknown", "unfinished is not ok");
+  assert.match(c.detail, /Importing history/);
+});
+
+test("a finished import reads as done", () => {
+  const checks = buildStatus(
+    input({ backfills: [{ pet: "Rex", summary: "Finished — 710 days of history.", done: true }] })
+  );
+  assert.equal(checks.find((x) => x.id === "backfill:Rex")!.level, "ok");
 });

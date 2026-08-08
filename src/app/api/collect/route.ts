@@ -7,6 +7,7 @@ import { datesToCollect, runOutcome } from "@/lib/collector";
 import { addCapability, finishRun, listPets, startRun, storedDays, upsertPet, writeReadings } from "@/lib/store";
 import { addDays, dayRangeEpoch, localDate } from "@/lib/time";
 import { deliverPendingAlerts, raiseAndWithdrawAlerts } from "@/lib/alert-run";
+import { advanceBackfill, beginBackfill, readJob } from "@/lib/import-run";
 
 export const maxDuration = 300;
 
@@ -111,6 +112,31 @@ export async function GET(req: NextRequest) {
               // A profile read failing must not lose the day's collected data.
               console.error("[collect] current-value fetch failed:", String(e).slice(0, 200));
             }
+          }
+
+          // Walk history backwards, a chunk per run, until the vendor stops
+          // returning data. Started automatically the first time a pet is seen:
+          // a tracker holds years, the recovery window above only repairs the
+          // last fortnight, and without this a new install could never recover
+          // any of it. Two years cannot be fetched inside one request, so it
+          // fills in over several nights and /status says how far it has got.
+          try {
+            if (!(await readJob(petId, source.info.id))) {
+              await beginBackfill(petId, source.info.id, addDays(today, -1));
+            }
+            const step = await advanceBackfill(source, petId, pet.key);
+            if (step) {
+              summary.push({
+                source: source.info.id,
+                pet: pet.name,
+                backfill: step.finished
+                  ? `complete: ${step.job.daysWithData} days of history`
+                  : `${step.job.daysDone} days walked, now at ${step.job.cursorDate}`,
+              });
+            }
+          } catch (e) {
+            // A backfill fault must never cost the day's ordinary collection.
+            console.error("[collect] backfill step failed:", String(e).slice(0, 200));
           }
 
           // Credit the pet with every metric that actually arrived. Adapters

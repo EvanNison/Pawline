@@ -55,6 +55,11 @@ export interface StatusInput {
   /** A credential is stored but cannot be decrypted — worse than absent. */
   credentialsUnreadable: boolean;
   /**
+   * One line per pet still importing history, so a backfill in progress is
+   * visible rather than looking like missing data.
+   */
+  backfills: { pet: string; summary: string; done: boolean }[];
+  /**
    * Whether any pet reports how long the tracker was actually worn. Without it,
    * a quiet day cannot be told apart from a day the collar sat on a table.
    */
@@ -302,6 +307,16 @@ export function buildStatus(input: StatusInput): Check[] {
       label: "Email alerts",
       level: "ok",
       detail: `Sending via ${routeName(input.emailChannel)}, nothing waiting to send.`,
+    });
+  }
+
+  // A backfill in progress looks exactly like missing history unless it says so.
+  for (const b of input.backfills) {
+    checks.push({
+      id: `backfill:${b.pet}`,
+      label: `History import — ${b.pet}`,
+      level: b.done ? "ok" : "unknown",
+      detail: b.summary,
     });
   }
 

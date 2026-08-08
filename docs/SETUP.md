@@ -121,6 +121,19 @@ data.
 > which is correct and expected — it means nothing is being *fetched*, not that
 > nothing is being *judged*.
 
+## Step 4b — Your history fills in over a few nights
+
+The first collection fetches about a week, not everything your tracker holds.
+That is deliberate: no server can pull two years of data inside a single web
+request, so Pawline walks backwards a chunk at a time, once per night.
+
+Open **Status** and you will see a line like *"Importing history — 120 days
+walked so far, now at 2026-04-01."* Two years takes a few days to fill in. It
+resumes on its own if a run fails, and it never re-fetches a day it already has.
+
+You do not have to do anything while this happens. The dashboard works from day
+one on whatever has arrived so far.
+
 ## Step 5 — Check it works, then wait
 
 Open **Status**. It tells you whether collection is running, whether each

@@ -85,6 +85,8 @@ Working, and verified against a real Postgres:
 - [x] Dashboard, status, alerts, trends, vet report, setup
 - [x] CSV import, hand-logged weight and dated notes
 - [x] Encrypted credentials, and the Tractive adapter behind its gate
+- [x] Historical backfill: walks a tracker's history backwards a chunk per
+      night until the vendor stops returning data, with progress on /status
 - [x] Every SQL query prepared against the real schema (`npm run check:sql`),
       plus an end-to-end import check (`npm run check:import`)
 
@@ -96,8 +98,7 @@ Not there yet:
       But nothing has run for weeks on end, which is what alerting actually
       depends on
 - [ ] Statistical calibration, as above
-- [ ] EU Data Act importer, and chunked backfill of a long vendor history.
-      `src/lib/importer.ts` is written and tested but nothing calls it yet
+- [ ] EU Data Act importer
 - [ ] Hour-of-day heatmap, which needs hourly readings only a vendor API
       supplies, so it would sit empty for import-only setups
 - [ ] Species and timezone are one setting per install, not per pet

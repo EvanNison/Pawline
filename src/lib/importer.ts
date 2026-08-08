@@ -251,3 +251,39 @@ export function progressOf(job: ImportJob, opts: ImportOptions = DEFAULT_IMPORT_
           : `${job.daysWithData} days of data so far${span}…`;
   return { daysDone: job.daysDone, daysWithData: job.daysWithData, fraction: job.state === "done" ? 1 : fraction, summary };
 }
+
+/**
+ * What the Status page says about one pet's history import.
+ *
+ * Lives here, not in the page, because the page is a server component the unit
+ * suite cannot reach — and the case this exists to handle was invisible until
+ * someone disconnected a source and read the screen. An unfinished job only
+ * advances while its source is still connected; disconnecting one leaves the
+ * job at "running" for good, and the page went on promising "a little more each
+ * night" about work nothing would ever do. Claiming progress that cannot happen
+ * is the same failure as a dead collector showing a green tick.
+ */
+export function backfillSummary(
+  job: Pick<
+    ImportJob,
+    "state" | "daysDone" | "daysWithData" | "cursorDate" | "earliestDate" | "finishedReason" | "lastError"
+  >,
+  source: { connected: boolean; label: string }
+): string {
+  const from = job.cursorDate ?? "the start";
+  if (job.state === "done") {
+    const back = job.earliestDate ? `, back to ${job.earliestDate}` : "";
+    const why = job.finishedReason ? ` (${job.finishedReason})` : "";
+    return `Finished — ${job.daysWithData} days of history${back}.${why}`;
+  }
+  // Checked before lastError: a disconnected source cannot retry, so "it
+  // resumes on the next run" would be false in exactly the case where the
+  // reader most needs to know it will not.
+  if (!source.connected) {
+    return `Stopped at ${job.daysDone} days, reaching back to ${from}. The ${source.label} connection was removed, so no more history will arrive. Reconnect it in Setup and it carries on from where it stopped.`;
+  }
+  if (job.lastError) {
+    return `Paused after ${job.daysDone} days: ${job.lastError.slice(0, 120)}. It resumes on the next run.`;
+  }
+  return `Importing history — ${job.daysDone} days walked so far, now at ${from}. A little more each night.`;
+}

@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   applyChunk,
+  backfillSummary,
   planChunk,
   progressOf,
   startJob,
@@ -232,4 +233,61 @@ test("a birth-date floor is not reported as truncation", () => {
 test("the day ceiling IS reported as truncation", () => {
   const { job } = runToCompletion(startJob("p", "csv", "2026-08-10"), () => true, OPTS);
   assert.equal(wasTruncated(job), true);
+});
+
+// A disconnected source is the case the unit suite could not see, because the
+// wording lived in a server component. The job stays at "running" for ever, and
+// the page went on saying "a little more each night" about work that nothing
+// would ever perform again.
+const HALTED = {
+  state: "running" as const,
+  daysDone: 200,
+  daysWithData: 200,
+  cursorDate: "2026-01-19",
+  earliestDate: "2026-01-14",
+  finishedReason: null,
+  lastError: null,
+};
+const CONNECTED = { connected: true, label: "Tractive account" };
+const GONE = { connected: false, label: "Tractive account" };
+
+test("a running import reports that it is still going", () => {
+  const s = backfillSummary(HALTED, CONNECTED);
+  assert.match(s, /200 days walked/);
+  assert.match(s, /each night/);
+});
+
+test("an import whose source was disconnected never claims it will continue", () => {
+  const s = backfillSummary(HALTED, GONE);
+  assert.doesNotMatch(s, /each night/, "nothing will happen tonight or any night");
+  assert.doesNotMatch(s, /resumes/);
+  assert.match(s, /Stopped at 200 days/);
+  assert.match(s, /Tractive account/, "say which connection went, so it can be put back");
+  assert.match(s, /Reconnect/);
+});
+
+// Order matters: a stored error plus a removed source must report the source,
+// because "it resumes on the next run" is false precisely when it is disconnected.
+test("a disconnected source outranks a recorded error", () => {
+  const s = backfillSummary({ ...HALTED, lastError: "fetch failed" }, GONE);
+  assert.doesNotMatch(s, /resumes on the next run/);
+  assert.match(s, /connection was removed/);
+});
+
+test("an error on a connected source still says it will retry", () => {
+  const s = backfillSummary({ ...HALTED, lastError: "fetch failed" }, CONNECTED);
+  assert.match(s, /Paused after 200 days/);
+  assert.match(s, /resumes on the next run/);
+});
+
+// A finished import is finished whatever happened to the source afterwards:
+// the history is already stored, so there is nothing to reconnect for.
+test("a finished import is not reopened by disconnecting the source", () => {
+  const s = backfillSummary({ ...HALTED, state: "done", finishedReason: "no data for 21 days" }, GONE);
+  assert.match(s, /Finished — 200 days of history, back to 2026-01-14/);
+  assert.doesNotMatch(s, /connection was removed/);
+});
+
+test("a job that never got a cursor still reads as a sentence", () => {
+  assert.match(backfillSummary({ ...HALTED, cursorDate: null }, GONE), /reaching back to the start/);
 });

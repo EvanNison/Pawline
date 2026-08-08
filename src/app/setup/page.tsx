@@ -188,7 +188,17 @@ export default async function SetupPage({
           <input id="alert_email" name="alert_email" type="email" defaultValue={settings.alertEmail ?? ""} className={field} />
         </div>
         <fieldset className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
-          <legend className="px-1 text-sm font-medium">Sending via Gmail</legend>
+          {/* This heading used to read "Sending via Gmail", present tense, above two
+              empty boxes — so an untouched install looked like it was already
+              mailing through someone's Google account, and the first person to
+              read it reasonably wondered where the password had come from. A
+              section heading must not read as a statement of what is happening. */}
+          <legend className="px-1 text-sm font-medium">Send email through Gmail</legend>
+          <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+            {settings.gmailUser
+              ? `Currently sending as ${settings.gmailUser}.`
+              : "Not set up. Leave these blank if you do not want emailed alerts."}
+          </p>
           <p className="text-xs text-zinc-500">
             You are emailing yourself, so your own mailbox is the simplest route. Needs a Google{" "}
             <a className="underline" href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer">App Password</a>,

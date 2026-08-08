@@ -81,7 +81,7 @@ particularly the alert lifecycle (§9), why a green test suite is not evidence
 Before you claim something works:
 
 ```bash
-npm test          # 222 tests, no database needed
+npm test          # 231 tests, no database needed
 npm run typecheck
 npm run lint
 ```

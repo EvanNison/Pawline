@@ -92,11 +92,12 @@ Working, and verified against a real Postgres:
 
 Not there yet:
 
-- [ ] **Not yet run against a real tracker account for a sustained period.**
-      The Tractive adapter has been verified once against a live account: 26 of
-      26 metrics matched a second, independent implementation across two days.
-      But nothing has run for weeks on end, which is what alerting actually
-      depends on
+- [ ] **Not yet run unattended for a sustained period.** The Tractive adapter
+      has been used against a live account: 26 of 26 metrics matched a second,
+      independent implementation, and the backfill then walked 200 days of that
+      account's real history. But every run so far was triggered by hand and
+      watched. Nothing has collected on its own for weeks, which is what
+      alerting actually depends on
 - [ ] Statistical calibration, as above
 - [ ] EU Data Act importer
 - [ ] Hour-of-day heatmap, which needs hourly readings only a vendor API
@@ -109,7 +110,7 @@ Not there yet:
 
 ```bash
 npm install
-npm test              # 223 tests, no database needed
+npm test              # 231 tests, no database needed
 npm run typecheck
 npm run dev
 ```

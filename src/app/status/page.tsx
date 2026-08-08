@@ -4,7 +4,8 @@ import { readSettings } from "@/lib/settings";
 import { localDate } from "@/lib/time";
 import { REGISTRY, metric as metricDef } from "@/lib/metrics";
 import { buildStatus, headline, overallLevel, type Check, type Level } from "@/lib/health";
-import { scheduledSources } from "@/lib/sources/registry";
+import { scheduledSources, sourceInfo } from "@/lib/sources/registry";
+import { backfillSummary, type ImportJob } from "@/lib/importer";
 import { emailChannel } from "@/lib/notify";
 import { encryptionKey, reveal } from "@/lib/secrets";
 import Link from "next/link";
@@ -88,20 +89,31 @@ export default async function StatusPage() {
   // one that had them. Verified against a real server, not reasoned about —
   // this is the third attempt at this one bug.
   // Every pet with a history import on the go, so the fill-in is visible.
-  const backfillRows = await s`select p.name, j.state, j.days_done, j.days_with_data,
+  const backfillRows = await s`select p.name, j.state, j.source_id, j.days_done, j.days_with_data,
       j.cursor_date::text as cursor_date, j.earliest_date::text as earliest_date,
       j.finished_reason, j.last_error
     from import_jobs j join pets p on p.id = j.pet_id`;
-  const backfills = backfillRows.map((r) => ({
-    pet: String(r.name),
-    done: r.state === "done",
-    summary:
-      r.state === "done"
-        ? `Finished — ${r.days_with_data} days of history${r.earliest_date ? `, back to ${r.earliest_date}` : ""}.${r.finished_reason ? ` (${r.finished_reason})` : ""}`
-        : r.last_error
-          ? `Paused after ${r.days_done} days: ${String(r.last_error).slice(0, 120)}. It resumes on the next run.`
-          : `Importing history — ${r.days_done} days walked so far, now at ${r.cursor_date ?? "the start"}. A little more each night.`,
-  }));
+  const scheduled = await scheduledSources();
+  const scheduledIds = new Set(scheduled.map((src) => src.info.id));
+  const backfills = backfillRows.map((r) => {
+    const sourceId = String(r.source_id);
+    return {
+      pet: String(r.name),
+      done: r.state === "done",
+      summary: backfillSummary(
+        {
+          state: String(r.state) as ImportJob["state"],
+          daysDone: Number(r.days_done ?? 0),
+          daysWithData: Number(r.days_with_data ?? 0),
+          cursorDate: (r.cursor_date as string | null) ?? null,
+          earliestDate: (r.earliest_date as string | null) ?? null,
+          finishedReason: (r.finished_reason as string | null) ?? null,
+          lastError: (r.last_error as string | null) ?? null,
+        },
+        { connected: scheduledIds.has(sourceId), label: sourceInfo(sourceId)?.label ?? sourceId }
+      ),
+    };
+  });
 
   const [{ count: wearRowCount }] = await s`select count(*)::int as count
     from daily_metrics where metric = 'wear_time'`;
@@ -144,7 +156,7 @@ export default async function StatusPage() {
     credentialsUnreadable: Boolean(creds) && !credsUsable,
     wearMeasured: Number(wearRowCount) > 0,
     backfills,
-    scheduledSources: (await scheduledSources()).length,
+    scheduledSources: scheduled.length,
     petCount: Number(petCount),
   });
 

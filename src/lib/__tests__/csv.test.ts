@@ -138,7 +138,7 @@ test("a row with the wrong number of cells is refused, not shifted", () => {
   // The dangerous case: an unquoted thousands separator. Every value after the
   // extra comma lands in the wrong column, and each one looks plausible.
   const { readings, warnings } = parseCsv(
-    ["date,weight,resting_heart_rate", "2026-08-01,14,515,62"].join("\n")
+    ["date,weight_kg,resting_heart_rate", "2026-08-01,14,515,62"].join("\n")
   );
   assert.equal(readings.length, 0, "must not import 14 g of dog and a heart rate of 515");
   assert.match(warnings[0].message, /3 values but the header has 3|4 values but the header has 3/);
@@ -236,4 +236,25 @@ test("the summary names every pet in a multi-pet file", () => {
   );
   assert.deepEqual(s.pets.sort(), ["Bo", "Rex"]);
   assert.equal(s.readings, 2);
+});
+
+
+// A spreadsheet saying `weight,32` means a 32 lb or 32 kg dog. Read as the
+// canonical unit it became 32 grams — a plausible-looking number wrong by three
+// orders of magnitude, on the measurement a vet reads most closely. There is no
+// way to tell which was meant, so the only safe answer is to refuse.
+test("a mass or distance column without a unit is refused, not guessed at", () => {
+  for (const header of ["weight", "distance"]) {
+    const { readings, warnings } = parseCsv(`date,${header}\n2026-08-01,32`);
+    assert.equal(readings.length, 0, `${header} must not be imported`);
+    assert.match(warnings[0].message, /needs its unit in the name/);
+    assert.match(warnings[0].message, new RegExp(`${header}_`), "and must name the alternatives");
+  }
+});
+
+test("units that cannot be misread are still accepted bare", () => {
+  // A count is a count and a minute is a minute; only mass and distance have a
+  // canonical unit nobody would write by hand.
+  const { readings } = parseCsv("date,resting_heart_rate,active_minutes\n2026-08-01,62,95");
+  assert.equal(readings.length, 2);
 });

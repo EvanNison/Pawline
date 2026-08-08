@@ -50,9 +50,10 @@ export default async function ImportPage() {
         </pre>
         <ul className="mt-3 list-disc space-y-1 pl-5 text-zinc-600 dark:text-zinc-400">
           <li>
-            <b>Units go in the header, never guessed.</b> <code>weight_lb</code> and{" "}
-            <code>weight_kg</code> are both converted. Guessing could mis-scale a chart a
-            vet reads.
+            <b>Units go in the header, and a bare name is refused.</b>{" "}
+            <code>weight_lb</code> and <code>weight_kg</code> are both converted; plain{" "}
+            <code>weight</code> is rejected, because 32 could be pounds or kilograms and
+            guessing wrong mis-scales a chart a vet reads. Same for distance.
           </li>
           <li>
             <b>A blank cell means &ldquo;not measured&rdquo;</b>, which is not the same as zero.
@@ -70,10 +71,21 @@ export default async function ImportPage() {
 
       <details className="rounded-xl border border-zinc-200 p-4 text-sm dark:border-zinc-800">
         <summary className="cursor-pointer font-semibold">Column names it recognises</summary>
+        {/* Mass and distance are listed with their unit suffixes, because the
+            bare name is refused: `weight,32` could mean pounds or kilograms and
+            reading it as the stored unit made it 32 grams. Advertising a column
+            the parser rejects would send someone to build a file that fails. */}
         <ul className="mt-2 grid grid-cols-1 gap-x-4 gap-y-0.5 text-zinc-600 sm:grid-cols-2 dark:text-zinc-400">
           {REGISTRY.map((d) => (
             <li key={d.key}>
-              <code>{d.key}</code> — {d.label}
+              <code>
+                {d.dimension === "mass"
+                  ? `${d.key}_kg` + " / " + `${d.key}_lb`
+                  : d.dimension === "distance"
+                    ? `${d.key}_km` + " / " + `${d.key}_mi`
+                    : d.key}
+              </code>{" "}
+              — {d.label}
             </li>
           ))}
         </ul>

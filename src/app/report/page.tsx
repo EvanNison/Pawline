@@ -117,7 +117,13 @@ export default async function ReportPage({
       const def = metricDef(m.key);
       const dim = def?.dimension ?? "duration";
       const all = byMetric.get(m.key) ?? [];
-      const series = WEAR_SENSITIVE.has(m.key) ? all.filter((p) => !lowWear.has(p.date)) : all;
+      // total_sleep_minutes is derived, so it is not in WEAR_SENSITIVE and slipped
+      // past the filter this page tells the reader it applies. Both halves it is
+      // built from are wear-sensitive, so it is too — and collar removal was
+      // producing a false sleep decline, flagged at 15%, in a document written
+      // for a vet.
+      const wearSensitive = WEAR_SENSITIVE.has(m.key) || m.key === "total_sleep_minutes";
+      const series = wearSensitive ? all.filter((p) => !lowWear.has(p.date)) : all;
       const shown = series.map((p) => ({ date: p.date, value: toDisplay(p.value, dim, settings.units) }));
 
       const last30 = avg(shown, addDays(today, -29), addDays(today, 1));
@@ -240,8 +246,28 @@ export default async function ReportPage({
                   {r.last30!.value} {r.unit}{" "}
                   <span className="text-xs text-zinc-400">({r.last30!.days}d)</span>
                 </td>
-                <td>{r.sixMo ? `${r.sixMo.value}` : "—"}</td>
-                <td>{r.yearAgo ? `${r.yearAgo.value}` : "—"}</td>
+                {/* Day counts on every window, not just the current one: five
+                    readings are enough to print an average, and a five-day
+                    historical sample printed bare reads as solid as a
+                    thirty-day one directly beside it. */}
+                <td>
+                  {r.sixMo ? (
+                    <>
+                      {r.sixMo.value} <span className="text-xs text-zinc-400">({r.sixMo.days}d)</span>
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td>
+                  {r.yearAgo ? (
+                    <>
+                      {r.yearAgo.value} <span className="text-xs text-zinc-400">({r.yearAgo.days}d)</span>
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 <td>{r.change === null ? "—" : `${r.change > 0 ? "+" : ""}${r.change}%`}</td>
               </tr>
             ))}

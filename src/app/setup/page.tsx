@@ -7,6 +7,7 @@ import { readSettings, writeSetting } from "@/lib/settings";
 import { encryptionKey, protect } from "@/lib/secrets";
 import { acknowledgementFor, recordAcknowledgement, setEnabled, TRACTIVE_SOURCE_INFO } from "@/lib/sources/registry";
 import { isValidTimezone } from "@/lib/time";
+import { REGISTRY, metric as metricDef } from "@/lib/metrics";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,13 @@ async function saveBasics(formData: FormData) {
   // Google shows app passwords in groups of four and people paste them so;
   // the spaces are presentation, not part of the secret.
   const gmailPass = String(formData.get("gmail_app_password") || "").replace(/\s+/g, "");
+  // Checkboxes send only what is ticked, so an empty list genuinely means
+  // "mute nothing" and must be written rather than skipped like the optional
+  // text fields below — otherwise unmuting would be impossible.
+  const muted = formData
+    .getAll("muted")
+    .map(String)
+    .filter((k) => REGISTRY.some((d) => d.alert && d.key === k));
 
   await writeSetting("units", units === "imperial" ? "imperial" : "metric");
   await writeSetting("species", species);
@@ -29,6 +37,7 @@ async function saveBasics(formData: FormData) {
   if (email) await writeSetting("alert_email", email);
   if (gmailUser) await writeSetting("gmail_user", gmailUser);
   if (gmailPass) await writeSetting("gmail_app_password", await protect(gmailPass));
+  await writeSetting("muted_metrics", JSON.stringify(muted));
   redirect("/setup?status=saved");
 }
 
@@ -137,6 +146,28 @@ export default async function SetupPage({
           </p>
           <input name="gmail_user" type="email" placeholder="you@gmail.com" className={field} />
           <input name="gmail_app_password" type="password" autoComplete="off" placeholder="app password" className={field} />
+        </fieldset>
+        <fieldset className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+          <legend className="px-1 text-sm font-medium">Stop emailing me about</legend>
+          <p className="mb-2 text-xs text-zinc-500">
+            A measurement that is simply noisy for your pet will keep firing. Muting stops
+            the emails — it does <b>not</b> stop the detection, and the alert still appears
+            on the dashboard and in the history. Hiding it entirely would make a real change
+            invisible, which is the opposite of the point.
+          </p>
+          <div className="grid gap-1 sm:grid-cols-2">
+            {REGISTRY.filter((d) => d.alert).map((d) => (
+              <label key={d.key} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  name="muted"
+                  value={d.key}
+                  defaultChecked={settings.mutedMetrics.includes(d.key)}
+                />
+                {metricDef(d.key)?.label ?? d.key}
+              </label>
+            ))}
+          </div>
         </fieldset>
         <button type="submit" className="rounded-md bg-indigo-600 px-4 py-2 font-medium text-white">Save</button>
       </form>

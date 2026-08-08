@@ -1,3 +1,4 @@
+import { requireSession } from "@/lib/session";
 import Link from "next/link";
 import NotConfigured from "@/components/NotConfigured";
 import { ensureSchema, sql } from "@/lib/db";
@@ -18,6 +19,7 @@ function statusOf(a: { acknowledged: boolean; resolved: boolean; emailed: boolea
 }
 
 export default async function AlertsPage() {
+  await requireSession();
   if (!process.env.DATABASE_URL && !process.env.POSTGRES_URL) return <NotConfigured />;
   try {
     await ensureSchema();

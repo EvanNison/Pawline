@@ -1,3 +1,4 @@
+import { requireSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import NotConfigured from "@/components/NotConfigured";
@@ -11,6 +12,7 @@ export const dynamic = "force-dynamic";
 
 async function saveBasics(formData: FormData) {
   "use server";
+  await requireSession();
   await ensureSchema();
   const units = String(formData.get("units") || "metric");
   const tz = String(formData.get("timezone") || "").trim();
@@ -32,6 +34,7 @@ async function saveBasics(formData: FormData) {
 
 async function enableTractive(formData: FormData) {
   "use server";
+  await requireSession();
   await ensureSchema();
   const email = String(formData.get("tractive_email") || "").trim();
   const password = String(formData.get("tractive_password") || "");
@@ -62,6 +65,7 @@ export default async function SetupPage({
 }: {
   searchParams: Promise<{ status?: string }>;
 }) {
+  await requireSession();
   const { status } = await searchParams;
   if (!process.env.DATABASE_URL && !process.env.POSTGRES_URL) return <NotConfigured />;
   try {

@@ -59,7 +59,10 @@ Then it builds for a couple of minutes and gives you a web address.
 
 ## Step 3 — Open your site and finish setup
 
-Open the address. It will ask for the dashboard password from Step 1.
+Open the address. It will ask for the dashboard password from Step 1. Every
+page asks, and the sign-in lasts 30 days on that device. Changing
+`APP_PASSWORD` on Vercel signs every device out, which is what to do if the
+link ever spreads further than you meant.
 
 Go to **Setup** and:
 
@@ -118,6 +121,8 @@ says and paste it to your assistant along with this file.
 | Alerts configured but no emails arriving | If using Gmail, the App Password is wrong or 2-Step Verification is not fully on. Check the Status page — it names the sending route in use. |
 | "No source is enabled for scheduled collection" | Nothing is connected yet. See Step 4. |
 | "Could not decrypt the stored credential" | The encryption key changed. Re-enter your source login in Setup. |
+| "This site is not protected yet" | `APP_PASSWORD` is not set on Vercel. Pawline is refusing to show your data until it is. Add it in Settings → Environment Variables, then redeploy. |
+| It asks for a password you don't recognise | It wants `APP_PASSWORD` from Step 1 — not your Tractive password. |
 | Last collection is days old | The daily job stopped. Check /status for the recorded error. |
 | Charts show gaps | Normal if the collar was off or charging. Check the wear-time chart first — it explains dips in everything else. |
 

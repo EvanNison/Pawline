@@ -1,3 +1,4 @@
+import { requireSession } from "@/lib/session";
 import Link from "next/link";
 import { ensureSchema, sql } from "@/lib/db";
 import { readSettings } from "@/lib/settings";
@@ -12,6 +13,7 @@ import TrendChart from "@/components/TrendChart";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
+  await requireSession();
   if (!process.env.DATABASE_URL && !process.env.POSTGRES_URL) {
     return (
       <main className="mx-auto max-w-2xl p-6">

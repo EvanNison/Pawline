@@ -1,3 +1,4 @@
+import { requireSession } from "@/lib/session";
 import { ensureSchema, sql, schemaState } from "@/lib/db";
 import { readSettings } from "@/lib/settings";
 import { localDate } from "@/lib/time";
@@ -34,6 +35,7 @@ const TONE: Record<Level, { dot: string; box: string; word: string }> = {
 };
 
 export default async function StatusPage() {
+  await requireSession();
   if (!process.env.DATABASE_URL && !process.env.POSTGRES_URL) return <NotConfigured />;
   try {
     await ensureSchema();

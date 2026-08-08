@@ -29,6 +29,7 @@ function input(over: Partial<StatusInput> = {}): StatusInput {
     metricFreshness: [{ metric: "resting_heart_rate", label: "Resting Heart Rate", newest: TODAY }],
     emailChannel: "gmail",
     scheduledSources: 1,
+    credentialsUnreadable: false,
     undeliveredAlerts: 0,
     credentialsPresent: true,
     petCount: 1,
@@ -222,4 +223,14 @@ test("no scheduled source is a choice, not a broken sign-in", () => {
 test("a missing sign-in IS broken when something is scheduled to fetch", () => {
   const checks = buildStatus(input({ scheduledSources: 1, credentialsPresent: false }));
   assert.equal(find(checks, "credentials").level, "bad");
+});
+
+// Present is not usable. A credential encrypted under a key that has since
+// changed still sits in the row, and "Saved" told the owner everything was fine
+// while collection could not start at all.
+test("a stored but undecryptable credential is reported as broken, not saved", () => {
+  const c = find(buildStatus(input({ credentialsPresent: false, credentialsUnreadable: true })), "credentials");
+  assert.equal(c.level, "bad");
+  assert.match(c.detail, /cannot be decrypted/);
+  assert.match(c.detail, /ENCRYPTION_KEY/);
 });

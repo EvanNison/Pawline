@@ -137,11 +137,27 @@ export interface AlertRecord {
   resolved?: boolean;
 }
 
+/**
+ * Escape text that came from outside before putting it in an email.
+ *
+ * Pet names and notes originate in an uploaded spreadsheet, so they are
+ * attacker-controlled in the ordinary sense of "not written by this program".
+ * Interpolated raw they can inject markup or a link into a message the reader
+ * has every reason to trust.
+ */
+function esc(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 export function renderAlertLine(a: AlertRecord, units: UnitSystem = "metric"): string {
   const past = a.resolved ? " — has since returned to normal" : "";
   // Absolute-threshold and operational alerts carry their own explanation;
   // there is no baseline to compare against.
-  if (a.note) return `<li><b>${a.note}</b> <i>(${a.date})</i>${past}</li>`;
+  if (a.note) return `<li><b>${esc(a.note)}</b> <i>(${a.date})</i>${past}</li>`;
 
   const def = metricDef(a.metric);
   const label = def?.label ?? a.metric;
@@ -179,12 +195,13 @@ export async function sendAlertEmail(petName: string, alerts: AlertRecord[], uni
   if (alerts.length === 0) return { sent: false };
   const lines = alerts.map((a) => renderAlertLine(a, units));
   const url = dashboardUrl();
+  const name = esc(petName);
   const link = url
-    ? `<a href="${url}">Open ${petName}'s dashboard</a> for the charts.`
+    ? `<a href="${esc(url)}">Open ${name}&rsquo;s dashboard</a> for the charts.`
     : "Open your dashboard for the charts.";
   const sent = await sendEmail(
     `🐾 ${petName}: ${alerts.length} health ${alerts.length === 1 ? "alert" : "alerts"}`,
-    `<p>${petName}'s recent readings have shifted away from their baseline:</p>` +
+    `<p>${name}&rsquo;s recent readings have shifted away from their baseline:</p>` +
       `<ul>${lines.join("")}</ul>` +
       `<p>Not a diagnosis — a nudge to look closer. ${link}</p>`
   );

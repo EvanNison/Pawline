@@ -166,6 +166,33 @@ try {
     check("and its direction", raised[0].direction === "high", raised[0].direction);
   }
 
+  // A second, narrower import must not hide what the first one stored. Pet
+  // upserts used to REPLACE capabilities, and every page filters charts by
+  // them, so importing a file with fewer columns made earlier readings
+  // unreachable while they still sat in the table.
+  const wide = "date,pet,resting_heart_rate,night_sleep_minutes,scratching\n2026-07-01,Wide,61,470,30";
+  const narrow = "date,pet,resting_heart_rate\n2026-07-02,Wide,62";
+  for (const text of [wide, narrow]) {
+    const src = new CsvSource(text, { timezone: "America/New_York", species: "dog" });
+    const parsedRun = parseCsv(text);
+    for (const pet of await src.listPets()) {
+      const pid = await upsertPet("csv", pet, "America/New_York");
+      await writeReadingsBulk(pid, "csv", parsedRun.readings.filter((r) => r.petKey === pet.key));
+    }
+  }
+  const widePet = (await listPets()).find((p) => p.id === "csv:Wide");
+  check("a narrower re-import keeps the earlier capabilities",
+    ["resting_heart_rate", "night_sleep_minutes", "scratching"].every((k) => widePet.capabilities.includes(k)),
+    JSON.stringify(widePet.capabilities));
+
+  // Changing the timezone setting must actually reach a pet that already
+  // exists; the conflict clause used to omit it, so "today" kept using the old
+  // zone while Setup said the change had taken effect.
+  const srcTz = new CsvSource(narrow, { timezone: "Australia/Sydney", species: "dog" });
+  for (const pet of await srcTz.listPets()) await upsertPet("csv", pet, "Australia/Sydney");
+  const movedPet = (await listPets()).find((p) => p.id === "csv:Wide");
+  check("a timezone change reaches an existing pet", movedPet.timezone === "Australia/Sydney", movedPet.timezone);
+
   // Muting after an alert already exists must actually silence it, and
   // unmuting must lift it. `muted` was copied only at insert, so the setting
   // appeared to do nothing on an open episode -- or kept suppressing after

@@ -51,3 +51,15 @@ test("the dashboard link is offered only when a host is actually known", () => {
   );
   assert.equal(dashboardUrl({ APP_URL: "https://pets.example.com" }), "https://pets.example.com");
 });
+
+test("text from an uploaded file cannot inject markup into the email", () => {
+  const line = renderAlertLine(
+    { id: 1, date: "2026-08-08", metric: "x", direction: "high", value: null,
+      baseline_median: null, severity: "watch", days_outside: null,
+      note: '<script>alert(1)</script><a href="http://evil">click</a>', resolved: false },
+    "metric"
+  );
+  assert.doesNotMatch(line, /<script>/);
+  assert.doesNotMatch(line, /<a href="http:\/\/evil"/);
+  assert.match(line, /&lt;script&gt;/);
+});

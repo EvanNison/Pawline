@@ -90,11 +90,26 @@ export async function listPets(): Promise<Pet[]> {
 
 export async function upsertPet(sourceId: string, pet: SourcePet, timezone: string): Promise<string> {
   const id = `${sourceId}:${pet.key}`;
-  await sql()`insert into pets (id, source_id, source_key, name, species, timezone, capabilities, updated_at)
+  const s = sql();
+
+  // Capabilities are MERGED, never replaced. Replacing them hid data: a second
+  // CSV with fewer columns narrowed the list, and because every page filters
+  // charts by capabilities, readings imported earlier became unreachable while
+  // still sitting in the table. Losing sight of stored history is worse than
+  // listing a metric that has gone quiet, which the status page reports anyway.
+  const [existing] = await s`select capabilities from pets
+    where source_id = ${sourceId} and source_key = ${pet.key}`;
+  const merged = [...new Set([...toStringArray(existing?.capabilities), ...pet.capabilities])];
+
+  // Timezone is updated too. Omitting it meant changing the setting never
+  // reached a pet that already existed, so "today" and every hand-logged date
+  // silently kept using the old zone while Setup said otherwise.
+  await s`insert into pets (id, source_id, source_key, name, species, timezone, capabilities, updated_at)
     values (${id}, ${sourceId}, ${pet.key}, ${pet.name}, ${pet.species},
-            ${pet.timezone ?? timezone}, ${sql().json(pet.capabilities)}, now())
+            ${pet.timezone ?? timezone}, ${s.json(merged)}, now())
     on conflict (source_id, source_key) do update set
       name = excluded.name, species = excluded.species,
+      timezone = excluded.timezone,
       capabilities = excluded.capabilities, updated_at = now()`;
   return id;
 }

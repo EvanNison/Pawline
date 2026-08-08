@@ -6,7 +6,7 @@ import { REGISTRY, metric as metricDef } from "@/lib/metrics";
 import { buildStatus, headline, overallLevel, type Check, type Level } from "@/lib/health";
 import { scheduledSources } from "@/lib/sources/registry";
 import { emailChannel } from "@/lib/notify";
-import { encryptionKey } from "@/lib/secrets";
+import { encryptionKey, reveal } from "@/lib/secrets";
 import Link from "next/link";
 import NotConfigured from "@/components/NotConfigured";
 
@@ -56,6 +56,12 @@ export default async function StatusPage() {
     where ok = true order by started_at desc limit 1`;
   const [{ count: petCount }] = await s`select count(*)::int as count from pets`;
   const [creds] = await s`select value from app_config where key = 'source:tractive:credentials'`;
+  // Present is not the same as usable. A credential encrypted under a key that
+  // has since changed still sits in the row, and reporting it as "Saved" told
+  // someone everything was fine while collection could not start at all — the
+  // exact shape of failure this page exists to catch. The setup guide already
+  // documents a "could not decrypt" state; nothing surfaced it.
+  const credsUsable = creds ? (await reveal(String(creds.value))).ok : false;
   // Deliberately the same predicate as deliverPendingAlerts, with no extra
   // filter. Excluding resolved rows here let Status say "nothing waiting to
   // send" moments before the next run emailed exactly those rows — resolved
@@ -70,11 +76,23 @@ export default async function StatusPage() {
   // took max(date) across every pet, so one current animal masked the same
   // measurement having stopped for another — on the page whose whole job is to
   // notice things stopping.
-  const freshRows = await s`select metric, min(newest)::text as newest from (
+  // Every pet that ADVERTISES a metric, crossed with what it has actually
+  // recorded — not only the pets that have rows. Grouping over stored rows
+  // alone still let a pet which has never produced an advertised measurement
+  // vanish from the comparison, so another pet's current reading made the
+  // metric look current for everyone. A left join keeps that pet in, with a
+  // null date, which is the honest answer: nothing has ever arrived.
+  const freshRows = await s`select m.metric, min(d.newest)::text as newest
+    from (
+      select p.id as pet_id, c.metric
+      from pets p, lateral jsonb_array_elements_text(p.capabilities) as c(metric)
+    ) m
+    left join (
       select pet_id, metric, max(date) as newest
       from daily_metrics where metric not like 'raw.%'
       group by pet_id, metric
-    ) per_pet group by metric`;
+    ) d on d.pet_id = m.pet_id and d.metric = m.metric
+    group by m.metric`;
   const freshByMetric = new Map(freshRows.map((r) => [r.metric as string, r.newest as string | null]));
 
   const checks = buildStatus({
@@ -96,7 +114,8 @@ export default async function StatusPage() {
     })),
     emailChannel: channel,
     undeliveredAlerts: Number(undelivered),
-    credentialsPresent: Boolean(creds),
+    credentialsPresent: Boolean(creds) && credsUsable,
+    credentialsUnreadable: Boolean(creds) && !credsUsable,
     scheduledSources: (await scheduledSources()).length,
     petCount: Number(petCount),
   });

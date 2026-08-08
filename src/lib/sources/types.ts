@@ -72,4 +72,14 @@ export interface Source {
    * auth failures the caller should retry or surface.
    */
   fetchDay(petKey: string, date: string): Promise<Reading[]>;
+
+  /**
+   * Readings that describe the pet right now rather than a past day — a profile
+   * weight, say. Optional; sources without such values omit it.
+   *
+   * Called once per pet per run and stamped with today only. Writing a current
+   * value onto historical dates would fabricate a flat history for the very
+   * measurement a vet reads most closely.
+   */
+  fetchCurrent?(petKey: string, today: string): Promise<Reading[]>;
 }

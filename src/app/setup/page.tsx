@@ -34,8 +34,16 @@ async function saveBasics(formData: FormData) {
   await writeSetting("units", units === "imperial" ? "imperial" : "metric");
   await writeSetting("species", species);
   if (tz && isValidTimezone(tz)) await writeSetting("timezone", tz);
-  if (email) await writeSetting("alert_email", email);
-  if (gmailUser) await writeSetting("gmail_user", gmailUser);
+  // Written even when blank, so these can be turned OFF. Skipping empty values
+  // meant an address or a Gmail login could be set and never removed: clearing
+  // the field looked like it worked and the next run still emailed, using a
+  // credential the owner believed they had deleted.
+  await writeSetting("alert_email", email);
+  await writeSetting("gmail_user", gmailUser);
+  // The password is the exception: an empty box means "leave it alone", because
+  // it is never rendered back into the form and blanking it on every save would
+  // wipe the credential each time any other setting changed. Clearing the
+  // username above is what switches Gmail off.
   if (gmailPass) await writeSetting("gmail_app_password", await protect(gmailPass));
   await writeSetting("muted_metrics", JSON.stringify(muted));
   redirect("/setup?status=saved");
@@ -64,7 +72,10 @@ async function enableTractive(formData: FormData) {
 
 const MESSAGES: Record<string, { ok: boolean; text: string }> = {
   saved: { ok: true, text: "✅ Saved." },
-  tractive_on: { ok: true, text: "✅ Tractive connected. Collection runs daily from now on." },
+  tractive_on: {
+    ok: true,
+    text: "✅ Tractive login saved and collection enabled. It has not been tested yet — the first run will use it, so check Status afterwards.",
+  },
   not_accepted: { ok: false, text: "❌ Not enabled — the acknowledgement was not ticked." },
   missing_login: { ok: false, text: "❌ Please enter both the email and password." },
 };
@@ -144,7 +155,7 @@ export default async function SetupPage({
             but Google is clear that an App Password grants access to your Google account, so treat
             it as a real credential and use one created solely for Pawline.
           </p>
-          <input name="gmail_user" type="email" placeholder="you@gmail.com" className={field} />
+          <input name="gmail_user" type="email" defaultValue={settings.gmailUser ?? ""} placeholder="you@gmail.com" className={field} />
           <input name="gmail_app_password" type="password" autoComplete="off" placeholder="app password" className={field} />
         </fieldset>
         <fieldset className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">

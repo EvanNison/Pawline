@@ -186,6 +186,11 @@ export class TractiveSource implements Source {
    * historical days during a backwards import would fabricate a flat weight
    * history, for the metric a vet looks at first.
    */
+  /** Profile weight. Named for the interface so the collector actually calls it. */
+  async fetchCurrent(petKey: string, today: string): Promise<Reading[]> {
+    return this.fetchProfileWeight(petKey, today);
+  }
+
   async fetchProfileWeight(petKey: string, today: string): Promise<Reading[]> {
     const details = (await this.get(`${GRAPH}/trackable_object/${petKey}`)) as Record<string, unknown>;
     return mapProfileWeight(details ?? {}, petKey, today, today);

@@ -89,12 +89,21 @@ export async function raiseAndWithdrawAlerts(petId: string, today: string, muted
  * still recorded and still shown — a mute that hid the row would make a
  * suppressed detection invisible.
  */
-export async function deliverPendingAlerts(units: "metric" | "imperial"): Promise<void> {
+export async function deliverPendingAlerts(
+  units: "metric" | "imperial",
+  muted: string[] = []
+): Promise<void> {
   const s = sql();
+  // Muting is applied from the CURRENT setting, not from the flag stored on the
+  // row. The flag is only refreshed while a deviation is still being detected,
+  // so a queued alert for a metric that has since settled kept whatever value it
+  // was created with — and muting a noisy measurement did not stop the email
+  // already waiting to go out, which is exactly the case someone mutes for.
   const pending = await s`select a.id, a.date::text as date, a.metric, a.direction, a.value,
       a.baseline_median, a.severity, a.days_outside, a.note, a.resolved, p.name as pet
     from alerts a join pets p on p.id = a.pet_id
-    where a.emailed = false and a.acknowledged = false and a.muted = false
+    where a.emailed = false and a.acknowledged = false
+      and a.muted = false and a.metric <> all(${muted})
     order by a.date desc limit 50`;
   if (pending.length === 0) return;
   if (!(await isEmailConfigured())) return;

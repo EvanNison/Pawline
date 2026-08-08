@@ -93,6 +93,21 @@ export async function GET(req: NextRequest) {
               written.add(date);
             }
           }
+          // Values that describe the pet now rather than a past day — the
+          // profile weight. The adapter advertised weight in its capabilities
+          // and implemented the fetch, and nothing ever called it, so the one
+          // measurement vets ask about most was never collected. Stamped with
+          // today only, never backfilled across the window.
+          if (source.fetchCurrent) {
+            try {
+              const current = await source.fetchCurrent(pet.key, today);
+              if (current.length > 0) await writeReadings(petId, source.info.id, current);
+            } catch (e) {
+              // A profile read failing must not lose the day's collected data.
+              console.error("[collect] current-value fetch failed:", String(e).slice(0, 200));
+            }
+          }
+
           daysWritten += written.size;
 
           await raiseAndWithdrawAlerts(petId, today, settings.mutedMetrics);
@@ -140,7 +155,7 @@ export async function GET(req: NextRequest) {
     await finishRun(alertRunId, !anyFailure, 0, anyFailure ? "alert evaluation failed" : undefined);
   }
 
-  await deliverPendingAlerts(settings.units);
+  await deliverPendingAlerts(settings.units, settings.mutedMetrics);
 
   return NextResponse.json(
     { ok: !anyFailure, sourcesScheduled: sources.length, petsEvaluated: evaluated.length, results: summary },

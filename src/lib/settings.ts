@@ -24,6 +24,8 @@ export interface Settings {
   timezone: string;
   species: Species;
   alertEmail: string | null;
+  /** The Gmail address used to send, so Setup can render it back and allow clearing it. */
+  gmailUser: string | null;
   /**
    * Metrics whose *notifications* are muted. Detection still runs and the
    * history still records it — muting must never suppress the row, or a
@@ -38,6 +40,7 @@ export const DEFAULT_SETTINGS: Settings = {
   timezone: "UTC",
   species: "unknown",
   alertEmail: null,
+  gmailUser: null,
   mutedMetrics: [],
 };
 
@@ -65,6 +68,7 @@ export async function readSettings(): Promise<Settings> {
       ? (map.get("species") as Species)
       : "unknown",
     alertEmail: map.get("alert_email") ?? null,
+    gmailUser: map.get("gmail_user") || null,
     mutedMetrics: muted.filter((m) => typeof m === "string"),
   };
 }

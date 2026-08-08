@@ -79,10 +79,11 @@ strings, where they end up in server logs.
 
 ## 9. Alert lifecycle invariants — carried over, not re-derived
 
-Pawline has no alerting layer yet. When it gets one, these rules are not
-suggestions: each cost a round of adversarial review in the predecessor, and
-most were found only after a previous fix had introduced them. Several were
-also *wrong as first written here* — corrected below.
+These were written before the alerting layer existed and are now implemented,
+in `src/lib/alert-run.ts`. They are not suggestions: each cost a round of
+adversarial review in the predecessor, and most were found only after a
+previous fix had introduced them. Several were also *wrong as first written
+here* — corrected below.
 
 **Identity is the episode, not the day.** Keying an alert by the deviation's
 date stops an unchanged *stale* condition being re-raised, but an ongoing one
@@ -126,10 +127,11 @@ is wrong" only where something could have been detected — which depends on tha
 metric's own baseline depth, recent valid readings, wear, and source freshness,
 not on the pet having data in general.
 
-**The schema must be able to hold all of this.** The `alerts` table here has
-`acknowledged` and nothing else; delivered, resolved, days-outside and note
-columns are a prerequisite, not a later refinement. The predecessor discovered
-that by finding a stop reason it could not persist.
+**The schema must be able to hold all of this.** The `alerts` table carries
+`acknowledged`, `emailed`, `resolved`, `resolved_at`, `days_outside`, `muted`
+and `note` for exactly this reason — they are a prerequisite, not a later
+refinement. The predecessor discovered that by finding a stop reason it could
+not persist. (`note` is not written by anything yet; the schema says so.)
 
 ## 10. A green test suite is not evidence — and neither is a green mutation run
 

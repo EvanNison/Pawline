@@ -52,6 +52,8 @@ export interface StatusInput {
    * configuration — an import-only install — not a fault.
    */
   scheduledSources: number;
+  /** A credential is stored but cannot be decrypted — worse than absent. */
+  credentialsUnreadable: boolean;
   undeliveredAlerts: number;
   credentialsPresent: boolean;
   petCount: number;
@@ -235,8 +237,16 @@ export function buildStatus(input: StatusInput): Check[] {
   // both false and a nudge toward the one option that carries a real risk.
   checks.push(
     input.credentialsPresent
-      ? { id: "credentials", label: "Tractive sign-in", level: "ok", detail: "Saved." }
-      : input.scheduledSources === 0
+      ? { id: "credentials", label: "Tractive sign-in", level: "ok", detail: "Saved and readable." }
+      : input.credentialsUnreadable
+        ? {
+            id: "credentials",
+            label: "Tractive sign-in",
+            level: "bad",
+            detail:
+              "A sign-in is stored but cannot be decrypted — this happens when ENCRYPTION_KEY changes. Nothing can be collected until you re-enter it in Setup.",
+          }
+        : input.scheduledSources === 0
         ? {
             id: "credentials",
             label: "Automatic collection",

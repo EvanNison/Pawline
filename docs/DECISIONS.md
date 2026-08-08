@@ -214,3 +214,35 @@ password signs every device out with no revocation list to maintain.
 
 A missing `APP_PASSWORD` in production refuses every request and explains why.
 Defaulting open when unconfigured is the bug this section exists to record.
+
+## 13. A cast is a claim, and the database is what settles it
+
+`listPets` read the `capabilities` jsonb column as:
+
+```ts
+capabilities: (r.capabilities as string[]) ?? []
+```
+
+This driver returns `jsonb` as a **string**. The cast compiled, asserted
+something false, and erased itself at runtime. Downstream, `availableMetrics`
+built a `Set` from it — a `Set` of single characters — so `cap.has("weight")`
+was always false and **every dashboard rendered a pet name, "not enough
+history", and no charts at all, from any source, permanently.**
+
+It survived 196 passing tests, a clean typecheck, a clean lint and a successful
+production build, because every one of those runs against a fake SQL runner that
+hands back genuine arrays. It took ten seconds to find by opening the page.
+
+Two rules follow:
+
+1. **`as` on anything crossing the database boundary is a bug waiting to be
+   observed.** Parse and validate instead — `toStringArray` accepts both shapes,
+   so a driver that does parse jsonb keeps working.
+2. **Open the running page.** §10 said recorded fixtures and real data raise the
+   ceiling that mutation testing cannot. This is the third time that has been
+   proved: the chart bugs, the raw 500s, and now this. Every one was invisible
+   to the suite and obvious on screen.
+
+`npm run check:import` now asserts the round trip — write, read back, and
+confirm the value still selects the metrics it names — because the write
+succeeding was never the part in doubt.

@@ -27,14 +27,30 @@ import {
 import { addCapability, writeReadingsBulk } from "./store";
 import type { Source } from "./sources/types";
 
+/**
+ * A `date` column back as a YYYY-MM-DD string.
+ *
+ * The driver returns a Date object, and casting it to string in TypeScript is a
+ * compile-time claim that erases at runtime — the same mistake that made every
+ * dashboard render zero charts when `jsonb` came back as a string. Every date
+ * here is compared and incremented as text, so a Date silently produced
+ * nonsense and the backfill did nothing at all while reporting no error.
+ */
+function toDateString(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  const s = String(value);
+  return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null;
+}
+
 function rowToJob(r: Record<string, unknown>): ImportJob {
   return {
     petId: String(r.pet_id),
     sourceId: String(r.source_id),
     state: String(r.state) as ImportJob["state"],
-    cursorDate: (r.cursor_date as string | null) ?? null,
-    earliestDate: (r.earliest_date as string | null) ?? null,
-    latestDate: (r.latest_date as string | null) ?? null,
+    cursorDate: toDateString(r.cursor_date),
+    earliestDate: toDateString(r.earliest_date),
+    latestDate: toDateString(r.latest_date),
     daysDone: Number(r.days_done ?? 0),
     daysWithData: Number(r.days_with_data ?? 0),
     emptyStreak: Number(r.empty_streak ?? 0),
@@ -61,8 +77,11 @@ async function save(job: ImportJob): Promise<void> {
 
 /** The stored job for a pet and source, or null if none has been started. */
 export async function readJob(petId: string, sourceId: string): Promise<ImportJob | null> {
-  const [row] = await sql()`select * from import_jobs
-    where pet_id = ${petId} and source_id = ${sourceId}`;
+  const [row] = await sql()`select pet_id, source_id, state,
+      cursor_date::text as cursor_date, earliest_date::text as earliest_date,
+      latest_date::text as latest_date, days_done, days_with_data, empty_streak,
+      last_error, finished_reason
+    from import_jobs where pet_id = ${petId} and source_id = ${sourceId}`;
   return row ? rowToJob(row as Record<string, unknown>) : null;
 }
 

@@ -111,8 +111,15 @@ exact wording and makes you tick a box. That decision is yours, and it is a real
 one — it is the same subscription that helps you find your pet if they go
 missing.
 
-If you are not willing to accept that, use Import. The app works fully without
-ever connecting a vendor account.
+If you are not willing to accept that, use Import. Charts, baselines, alerts and
+alert emails all work from imported data — the only thing you give up is the
+readings arriving on their own each night, so you re-upload when you have new
+data.
+
+> If you import only, the daily job still runs and still checks your stored
+> readings for deviations. The Status page will say no source is scheduled,
+> which is correct and expected — it means nothing is being *fetched*, not that
+> nothing is being *judged*.
 
 ## Step 5 — Check it works, then wait
 

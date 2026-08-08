@@ -107,6 +107,14 @@ export async function writeReadings(petId: string, sourceId: string, readings: R
  *
  * Same conflict rule as the single-row path, so re-uploading a corrected file
  * overwrites cleanly rather than erroring or duplicating.
+ *
+ * **Not atomic.** Each chunk commits on its own, so a timeout partway through
+ * leaves the earlier chunks stored while the page reports a failure. That is
+ * deliberate: wrapping thousands of rows in one transaction inside a serverless
+ * request trades a recoverable partial import for a hard timeout that stores
+ * nothing. Because the conflict rule makes re-import idempotent, the fix for a
+ * partial import is to upload the same file again — which is also the advice
+ * the page already gives.
  */
 export async function writeReadingsBulk(
   petId: string,

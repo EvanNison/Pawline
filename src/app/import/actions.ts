@@ -5,6 +5,8 @@ import { ensureSchema } from "@/lib/db";
 import { readSettings } from "@/lib/settings";
 import { upsertPet, writeReadingsBulk } from "@/lib/store";
 import { CsvSource, parseCsv, summarizeImport, type ImportSummary } from "@/lib/sources/csv";
+import { raiseAndWithdrawAlerts } from "@/lib/alert-run";
+import { localDate } from "@/lib/time";
 
 /** A decade of daily readings across every metric is well under a megabyte. */
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -74,13 +76,32 @@ export async function runImport(
       defaultPetName: defaultName,
     });
 
+    // Grouped once rather than filtered per pet: a file with a stray pet column
+    // can name thousands of distinct "pets", and a filter inside the loop makes
+    // that a full pass over every reading for each one.
+    const byPet = new Map<string, typeof parsed.readings>();
+    for (const r of parsed.readings) {
+      const list = byPet.get(r.petKey);
+      if (list) list.push(r);
+      else byPet.set(r.petKey, [r]);
+    }
+
     let written = 0;
+    const petIds: string[] = [];
     for (const pet of await source.listPets()) {
       const petId = await upsertPet("csv", pet, settings.timezone);
-      written += await writeReadingsBulk(
-        petId,
-        "csv",
-        parsed.readings.filter((r) => r.petKey === pet.key)
+      petIds.push(petId);
+      written += await writeReadingsBulk(petId, "csv", byPet.get(pet.key) ?? []);
+    }
+
+    // Judge the data now rather than at the next scheduled run. Someone
+    // importing two years of history expects to see what it says, and waiting
+    // overnight for a cron they may not have configured reads as the alerting
+    // simply not working. Failures here do not fail the import: the readings
+    // are stored, and the nightly run evaluates them again.
+    for (const petId of petIds) {
+      await raiseAndWithdrawAlerts(petId, localDate(settings.timezone), settings.mutedMetrics).catch(
+        (e) => console.error("[import] alert evaluation skipped:", String(e).slice(0, 200))
       );
     }
     return { ok: true, summary, written };

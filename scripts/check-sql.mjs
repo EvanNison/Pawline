@@ -46,11 +46,12 @@ function sourceFiles(dir) {
 function extractQueries(src, file) {
   const found = [];
   for (let i = 0; i < src.length; i++) {
-    // A tag is `sql` or `s` immediately followed by a backtick.
-    const m = /(^|[^A-Za-z0-9_$.])(sql|s)`/.exec(src.slice(Math.max(0, i - 1), i + 5));
-    if (!m || src[i] !== "`") continue;
-    const before = src.slice(0, i);
-    const tag = /(^|[^A-Za-z0-9_$.])(sql|s)$/.exec(before);
+    if (src[i] !== "`") continue;
+    // Both call shapes are tags here: `s\`…\`` where s is a client, and
+    // `sql()\`…\`` where sql() returns one. Missing the second silently left 18
+    // queries unchecked while the README claimed every query was covered —
+    // which is worse than no checker, because it is believed.
+    const tag = /(^|[^A-Za-z0-9_$.])(sql|s)(\(\))?$/.exec(src.slice(0, i));
     if (!tag) continue;
 
     let j = i + 1;

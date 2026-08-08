@@ -53,7 +53,17 @@ export function verifyToken(secret: string, token: string | undefined, nowEpoch:
   return Number.isFinite(exp) && exp > nowEpoch;
 }
 
-/** Whether the submitted password is the configured one. */
+/**
+ * Whether the submitted password is the configured one.
+ *
+ * **There is no rate limiting on sign-in, and this is a known weakness.** In
+ * a serverless deployment an in-memory counter is per-instance and resets
+ * constantly, so it would look like a defence without being one — and a
+ * database-backed counter turns every page load into a write. The mitigation is
+ * therefore the password itself: `APP_PASSWORD` should be long and random,
+ * which is what the setup guide asks for. Worth revisiting if this ever runs
+ * somewhere with shared state.
+ */
 export function passwordMatches(secret: string, submitted: string): boolean {
   return submitted.length > 0 && safeEqual(secret, submitted);
 }

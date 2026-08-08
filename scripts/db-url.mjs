@@ -8,8 +8,10 @@ import { fileURLToPath } from "url";
  * outside the repo: a script that reaches into a sibling directory works on
  * exactly one machine, and quietly reveals what else is on it.
  *
- * Any empty Postgres will do. Both checks build their schema in a throwaway
- * namespace and drop it afterwards.
+ * Any empty Postgres *that accepts TLS* will do — the app connects with
+ * `ssl: "require"`, so a plain local server without SSL will not work. A free
+ * Neon database is the easy answer. Both checks build their schema in a
+ * throwaway namespace and drop it afterwards.
  */
 export function databaseUrl() {
   if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
@@ -22,8 +24,9 @@ export function databaseUrl() {
   }
   console.error(
     "No database to check against.\n" +
-      "  Set DATABASE_URL, or put it in .env.local. Any empty Postgres works —\n" +
-      "  this builds its schema in a throwaway namespace and drops it afterwards."
+      "  Set DATABASE_URL, or put it in .env.local. Any empty Postgres that\n" +
+      "  accepts TLS works — this builds its schema in a throwaway namespace\n" +
+      "  and drops it afterwards."
   );
   process.exit(2);
 }

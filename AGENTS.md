@@ -73,8 +73,9 @@ npm run lint
 ```
 
 And, if your change touches SQL, storage, or anything that crosses the database
-boundary, these need a real Postgres in `DATABASE_URL` — both build a throwaway
-schema and drop it afterwards:
+boundary, these need a real Postgres in `DATABASE_URL` (TLS required — a free
+Neon database is the easy answer). Both build a throwaway schema and drop it
+afterwards:
 
 ```bash
 npm run check:sql     # PREPAREs every query in src/ against the real schema

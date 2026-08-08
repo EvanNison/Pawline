@@ -53,7 +53,7 @@ vendor. Data arrives through a *source adapter*, and you choose which to enable:
 
 | Source | Risk | Notes |
 |---|---|---|
-| **CSV import** | None | Bring data from anywhere. Also the export format. |
+| **CSV import** | None | Bring data from any tracker, or a file you keep by hand. |
 | **EU Data Act export** | None | Official vendor export. EU residents only. *(not built yet)* |
 | **Tractive API** | ⚠️ Vendor terms | Reads your own account. **Read the warning below.** |
 
@@ -98,7 +98,9 @@ Working, and verified against a real Postgres:
 - [x] Collector with gap repair, and the Tractive adapter behind its gate
 - [x] Dashboard, status, alerts and setup pages
 - [x] CSV import through the browser, verified end to end against a real database
-- [x] Every SQL query checked against the real schema (`npm run check:sql`)
+- [x] Every SQL query in `src/` prepared against the real schema (`npm run check:sql`),
+      except one bulk-insert helper that PREPARE cannot type — covered by
+      `npm run check:import` instead, and reported rather than skipped silently
 
 Not done:
 

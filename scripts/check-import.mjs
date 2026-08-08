@@ -109,6 +109,41 @@ try {
   ]);
   check("bulk path refuses unknown metrics", refused === 0, `wrote ${refused}`);
 
+  // A CSV-only install must actually produce alerts. It previously could not:
+  // the collect route returned before alert detection when no vendor source was
+  // scheduled, so an import-only user got charts and never a single alert --
+  // while the setup guide said the app worked fully without a vendor account.
+  const { raiseAndWithdrawAlerts } = await import("../src/lib/alert-run.ts");
+
+  // 70 normal days, then a sustained drop well outside the usual range.
+  const long = [];
+  for (let i = 0; i < 70; i++) {
+    const d = new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10);
+    long.push({ petKey: "Alert", date: d, metric: "resting_heart_rate", value: 60 + (i % 3) });
+  }
+  for (let i = 70; i < 74; i++) {
+    const d = new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10);
+    long.push({ petKey: "Alert", date: d, metric: "resting_heart_rate", value: 95 });
+  }
+  const today = long[long.length - 1].date;
+  await upsertPet("csv", { key: "Alert", name: "Alert", species: "dog", timezone: "UTC",
+    capabilities: ["resting_heart_rate"] }, "UTC");
+  await writeReadingsBulk("csv:Alert", "csv", long);
+  await raiseAndWithdrawAlerts("csv:Alert", today, []);
+
+  const raised = await admin.unsafe(
+    `select metric, severity, direction from ${SCHEMA}.alerts where pet_id = 'csv:Alert'`
+  );
+  check(
+    "imported data alone produces an alert",
+    raised.length > 0,
+    `no alert raised from ${long.length} imported readings ending in a sustained deviation`
+  );
+  if (raised.length > 0) {
+    check("the alert names the deviating metric", raised[0].metric === "resting_heart_rate", raised[0].metric);
+    check("and its direction", raised[0].direction === "high", raised[0].direction);
+  }
+
   await sql().end({ timeout: 5 });
 } finally {
   await admin.unsafe(`drop schema if exists ${SCHEMA} cascade`).catch(() => {});

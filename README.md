@@ -98,6 +98,9 @@ Working, and verified against a real Postgres:
 - [x] Collector with gap repair, and the Tractive adapter behind its gate
 - [x] Dashboard, status, alerts and setup pages
 - [x] CSV import through the browser, verified end to end against a real database
+- [x] Long-term trends: 30-day rolling averages and this-year-vs-last overlays
+- [x] A printable vet report: year-over-year table, flagged shifts, charts
+- [x] Hand-logged weight and dated notes, for what no collar records
 - [x] Every SQL query in `src/` prepared against the real schema (`npm run check:sql`),
       except one bulk-insert helper that PREPARE cannot type — covered by
       `npm run check:import` instead, and reported rather than skipped silently
@@ -107,6 +110,10 @@ Not done:
 - [ ] Never run against a real tracker account for a sustained period. This is
       the big one — the analysis is proven on synthetic data only.
 - [ ] EU Data Act importer
+- [ ] Hour-of-day activity heatmap. It needs hourly readings, which only a
+      vendor API supplies — a spreadsheet cannot carry them — so it would be
+      permanently blank for the import-only setup this project leads with.
+      Deliberately left out rather than shipped empty.
 - [ ] Statistical calibration: no measured false-alert rate, no detection-delay
       figure, no handling of seasonality or day-to-day autocorrelation
 

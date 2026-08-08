@@ -52,6 +52,13 @@ export async function runImport(
     return { ok: false, error: "That file could not be read as text.", summary: null };
   }
 
+  // Before the first read, not just before the writes. On a fresh deployment no
+  // tables exist yet, and the setup guide now sends people here first — so
+  // reading settings ahead of this made importing a spreadsheet, the very first
+  // thing a new user is told to do, fail with "relation app_config does not
+  // exist".
+  await ensureSchema();
+
   const settings = await readSettings();
   const defaultName = String(formData.get("pet_name") || "").trim() || "My pet";
   const parsed = parseCsv(text, defaultName);
@@ -69,7 +76,6 @@ export async function runImport(
   }
 
   try {
-    await ensureSchema();
     const source = new CsvSource(text, {
       species: settings.species,
       timezone: settings.timezone,

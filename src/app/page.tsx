@@ -11,6 +11,8 @@ import { buildChart } from "@/lib/chart";
 import { assessability, STALE_AFTER_DAYS } from "@/lib/health";
 import { localDate, addDays } from "@/lib/time";
 import TrendChart from "@/components/TrendChart";
+import QuickLog from "@/components/QuickLog";
+import { unitLabel } from "@/lib/units";
 
 export const dynamic = "force-dynamic";
 
@@ -131,6 +133,8 @@ export default async function Home() {
         <nav className="flex flex-wrap gap-1.5 text-sm">
           <Link href="/alerts" className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">🔔 Alerts</Link>
           <Link href="/status" className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">🩹 Status</Link>
+          <Link href="/trends" className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">📈 Trends</Link>
+          <Link href="/report" className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">🩺 Vet report</Link>
           <Link href="/import" className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">📄 Import</Link>
           <Link href="/setup" className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">⚙️ Setup</Link>
         </nav>
@@ -177,6 +181,11 @@ export default async function Home() {
           ))}
         </section>
       )}
+
+      {/* Directly under the verdict, above the charts: the two things a tracker
+          cannot record, put where someone will actually see them rather than on
+          a settings page they visit once. */}
+      <QuickLog petId={pet.id} weightUnit={unitLabel("mass", settings.units)} />
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {charts.map((c) => (

@@ -58,7 +58,6 @@ export default async function StatusPage() {
   // Ask the notify layer itself rather than re-deriving the rule here: two
   // copies of "is email set up" would drift, and this page exists to be trusted.
   const channel = await emailChannel();
-  const emailConfigured = channel !== "none";
 
   const freshRows = await s`select metric, max(date)::text as newest
     from daily_metrics where metric not like 'raw.%' group by metric`;
@@ -81,7 +80,7 @@ export default async function StatusPage() {
       label: metricDef(d.key)?.label ?? d.key,
       newest: freshByMetric.get(d.key) ?? null,
     })),
-    emailConfigured,
+    emailChannel: channel,
     undeliveredAlerts: Number(undelivered),
     credentialsPresent: Boolean(creds),
     petCount: Number(petCount),

@@ -20,7 +20,7 @@ function input(over: Partial<StatusInput> = {}): StatusInput {
     lastRun: { startedAt: hoursAgo(6), finishedAt: hoursAgo(6), ok: true, error: null },
     lastSuccessAt: hoursAgo(6),
     metricFreshness: [{ metric: "resting_heart_rate", label: "Resting Heart Rate", newest: TODAY }],
-    emailConfigured: true,
+    emailChannel: "gmail",
     undeliveredAlerts: 0,
     credentialsPresent: true,
     petCount: 1,
@@ -110,7 +110,7 @@ test("missing credentials are reported as the blocker they are", () => {
 });
 
 test("no email configured is a choice, not a fault", () => {
-  const checks = buildStatus(input({ emailConfigured: false }));
+  const checks = buildStatus(input({ emailChannel: "none" }));
   assert.equal(find(checks, "email").level, "unknown");
   assert.match(find(checks, "email").detail, /will not be emailed/);
 });
@@ -119,6 +119,25 @@ test("email configured but failing is a fault, because it hides alerts", () => {
   const checks = buildStatus(input({ undeliveredAlerts: 2 }));
   assert.equal(find(checks, "email").level, "bad");
   assert.match(find(checks, "email").detail, /2 alerts could not be emailed/);
+});
+
+// A Gmail user sent to check a Resend key goes looking for a setting they have
+// never owned, and concludes the app is broken. The advice must match the route.
+test("delivery failure names the route in use, and only that route", () => {
+  const gmail = find(buildStatus(input({ emailChannel: "gmail", undeliveredAlerts: 1 })), "email");
+  assert.match(gmail.detail, /Gmail/);
+  assert.match(gmail.detail, /App Password/);
+  assert.doesNotMatch(gmail.detail, /Resend/);
+
+  const resend = find(buildStatus(input({ emailChannel: "resend", undeliveredAlerts: 1 })), "email");
+  assert.match(resend.detail, /Resend/);
+  assert.doesNotMatch(resend.detail, /App Password/);
+});
+
+// SETUP.md tells people the status page names the sending route. It has to.
+test("a working route is named, so the page can be checked against the docs", () => {
+  assert.match(find(buildStatus(input({ emailChannel: "gmail" })), "email").detail, /Gmail/);
+  assert.match(find(buildStatus(input({ emailChannel: "resend" })), "email").detail, /Resend/);
 });
 
 test("the headline never claims health while anything is unassessed", () => {

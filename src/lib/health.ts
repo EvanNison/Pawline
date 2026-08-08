@@ -11,6 +11,9 @@
  * collection silently stopping while the charts keep showing last month.
  */
 
+// Type-only, so this stays free of the mail layer at runtime.
+import type { Channel } from "./notify";
+
 export type Level = "ok" | "warn" | "bad" | "unknown";
 
 export interface Check {
@@ -38,7 +41,12 @@ export interface StatusInput {
   lastSuccessAt: string | null;
   /** Newest stored date per alertable metric; null when the metric has none. */
   metricFreshness: { metric: string; label: string; newest: string | null }[];
-  emailConfigured: boolean;
+  /**
+   * Which route actually sends alerts, not merely whether one is set up.
+   * Carrying the channel rather than a boolean is what stops this page telling
+   * a Gmail user to go and check a Resend key they have never owned.
+   */
+  emailChannel: Channel;
   undeliveredAlerts: number;
   credentialsPresent: boolean;
   petCount: number;
@@ -165,6 +173,25 @@ function metricChecks(input: StatusInput): Check[] {
   });
 }
 
+/** What the owner would call the route, not what the code calls it. */
+function routeName(channel: Channel): string {
+  return channel === "gmail" ? "Gmail" : channel === "resend" ? "Resend" : "no route";
+}
+
+/**
+ * The fix for the route actually in use. Each route fails its own way, and
+ * generic advice is what sends someone hunting a setting they never had.
+ */
+function routeFix(channel: Channel): string {
+  if (channel === "gmail") {
+    return "Check the Gmail App Password in Setup. Google rejects your normal account password here, and an App Password stops working if 2-Step Verification is turned off.";
+  }
+  if (channel === "resend") {
+    return "Check the Resend key in Setup — a shared sender only delivers to the address that owns the Resend account.";
+  }
+  return "No sending route is configured.";
+}
+
 export function buildStatus(input: StatusInput): Check[] {
   const checks: Check[] = [collectionCheck(input)];
 
@@ -193,7 +220,7 @@ export function buildStatus(input: StatusInput): Check[] {
   // Not having email is a choice, not a fault; the dashboard is the alternative.
   // But email configured AND something undelivered IS a fault, and it is the
   // one that hides health alerts.
-  if (!input.emailConfigured) {
+  if (input.emailChannel === "none") {
     checks.push({
       id: "email",
       label: "Email alerts",
@@ -201,14 +228,20 @@ export function buildStatus(input: StatusInput): Check[] {
       detail: "Not set up. Alerts will appear on this dashboard but will not be emailed to you.",
     });
   } else if (input.undeliveredAlerts > 0) {
+    const n = input.undeliveredAlerts;
     checks.push({
       id: "email",
       label: "Email alerts",
       level: "bad",
-      detail: `${input.undeliveredAlerts} alert${input.undeliveredAlerts === 1 ? "" : "s"} could not be emailed. Check the Resend key in Setup — a shared sender only delivers to the address that owns the Resend account.`,
+      detail: `${n} alert${n === 1 ? "" : "s"} could not be emailed via ${routeName(input.emailChannel)}. ${routeFix(input.emailChannel)}`,
     });
   } else {
-    checks.push({ id: "email", label: "Email alerts", level: "ok", detail: "Set up, nothing waiting to send." });
+    checks.push({
+      id: "email",
+      label: "Email alerts",
+      level: "ok",
+      detail: `Sending via ${routeName(input.emailChannel)}, nothing waiting to send.`,
+    });
   }
 
   checks.push(...metricChecks(input));

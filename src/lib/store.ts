@@ -22,6 +22,33 @@ export interface Pet {
 }
 
 /**
+ * Record that this pet now has readings for a metric.
+ *
+ * Capabilities normally come from the source adapter — the tracker declares
+ * what its hardware reports. A hand-logged reading has no adapter to declare
+ * it, so without this the dashboard filters the metric straight back out and
+ * the value is stored, correct, and invisible. That was exactly the bug: weight
+ * could be logged all day and never appear on a chart.
+ *
+ * Idempotent, and additive only: a metric never disappears because one day's
+ * reading was missing.
+ */
+export async function addCapability(petId: string, metricKey: string): Promise<void> {
+  const s = sql();
+  // Read, merge and write back rather than using a jsonb array operator.
+  // `||` and `@>` require the column to actually hold an array, and rows written
+  // before this was understood hold a jsonb *string* containing array text —
+  // concatenating onto one of those produces an array of two JSON strings and
+  // loses every capability. Parsing through toStringArray copes with both.
+  const [row] = await s`select capabilities from pets where id = ${petId}`;
+  if (!row) return;
+  const current = toStringArray(row.capabilities);
+  if (current.includes(metricKey)) return;
+  await s`update pets set capabilities = ${s.json([...current, metricKey])}, updated_at = now()
+    where id = ${petId}`;
+}
+
+/**
  * Read a jsonb array column back as an actual array.
  *
  * This driver hands `jsonb` back as a **string**, so `r.capabilities as string[]`
@@ -65,7 +92,7 @@ export async function upsertPet(sourceId: string, pet: SourcePet, timezone: stri
   const id = `${sourceId}:${pet.key}`;
   await sql()`insert into pets (id, source_id, source_key, name, species, timezone, capabilities, updated_at)
     values (${id}, ${sourceId}, ${pet.key}, ${pet.name}, ${pet.species},
-            ${pet.timezone ?? timezone}, ${JSON.stringify(pet.capabilities)}::jsonb, now())
+            ${pet.timezone ?? timezone}, ${sql().json(pet.capabilities)}, now())
     on conflict (source_id, source_key) do update set
       name = excluded.name, species = excluded.species,
       capabilities = excluded.capabilities, updated_at = now()`;
@@ -181,4 +208,34 @@ export async function finishRun(
   await sql()`update runs set finished_at = now(), ok = ${ok},
       days_written = ${daysWritten}, error = ${error ?? null}
     where id = ${id}`;
+}
+
+export interface JournalEntry {
+  id: number;
+  date: string;
+  category: string;
+  note: string;
+}
+
+/**
+ * Dated notes for a pet, newest first.
+ *
+ * These are what make a chart interpretable later: "activity dropped in March"
+ * is a mystery until a note says the new medication started on the 4th. They
+ * were being written and never read, which made the whole feature a way to lose
+ * information carefully.
+ */
+export async function readJournal(petId: string, limit = 20, since?: string): Promise<JournalEntry[]> {
+  const rows = since
+    ? await sql()`select id, date::text as date, category, note from journal
+        where pet_id = ${petId} and date >= ${since}::date
+        order by date desc, id desc limit ${limit}`
+    : await sql()`select id, date::text as date, category, note from journal
+        where pet_id = ${petId} order by date desc, id desc limit ${limit}`;
+  return rows.map((r) => ({
+    id: Number(r.id),
+    date: r.date as string,
+    category: r.category as string,
+    note: r.note as string,
+  }));
 }

@@ -4,6 +4,7 @@ import { readSettings } from "@/lib/settings";
 import { localDate } from "@/lib/time";
 import { REGISTRY, metric as metricDef } from "@/lib/metrics";
 import { buildStatus, headline, overallLevel, type Check, type Level } from "@/lib/health";
+import { scheduledSources } from "@/lib/sources/registry";
 import { emailChannel } from "@/lib/notify";
 import { encryptionKey } from "@/lib/secrets";
 import Link from "next/link";
@@ -85,6 +86,7 @@ export default async function StatusPage() {
     emailChannel: channel,
     undeliveredAlerts: Number(undelivered),
     credentialsPresent: Boolean(creds),
+    scheduledSources: (await scheduledSources()).length,
     petCount: Number(petCount),
   });
 

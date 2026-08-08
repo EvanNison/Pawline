@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/session";
 import { ensureSchema, sql } from "@/lib/db";
 import { readSettings } from "@/lib/settings";
-import { writeReadings } from "@/lib/store";
+import { addCapability, writeReadings } from "@/lib/store";
 import { toCanonical } from "@/lib/units";
 import { localDate } from "@/lib/time";
 
@@ -54,6 +54,10 @@ export async function logWeight(_prev: LogResult, formData: FormData): Promise<L
   await writeReadings(petId, "manual", [
     { petKey: petId, date, metric: "weight", value: toCanonical(n, "mass", settings.units) },
   ]);
+  // Without this the dashboard filters weight straight back out, because
+  // capabilities are declared by source adapters and a hand-logged reading has
+  // no adapter to declare it. Stored, correct, and invisible.
+  await addCapability(petId, "weight");
 
   revalidatePath("/");
   const unit = settings.units === "imperial" ? "lb" : "kg";

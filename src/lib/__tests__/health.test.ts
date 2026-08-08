@@ -28,6 +28,7 @@ function input(over: Partial<StatusInput> = {}): StatusInput {
     lastSuccessAt: hoursAgo(6),
     metricFreshness: [{ metric: "resting_heart_rate", label: "Resting Heart Rate", newest: TODAY }],
     emailChannel: "gmail",
+    scheduledSources: 1,
     undeliveredAlerts: 0,
     credentialsPresent: true,
     petCount: 1,
@@ -206,4 +207,19 @@ test("the staleness boundary is inclusive of the threshold day", () => {
   assert.equal(at.assessable, 1, "exactly 3 days old is still current");
   const past = assessability([{ hasHistory: true, newest: "2026-08-03" }], "2026-08-07");
   assert.equal(past.stale, 1, "4 days old is stale");
+});
+
+// A CSV-only install has no vendor login by design. Reporting that as broken is
+// both false and a nudge toward the one source that carries a real risk.
+test("no scheduled source is a choice, not a broken sign-in", () => {
+  const checks = buildStatus(input({ scheduledSources: 0, credentialsPresent: false }));
+  const c = find(checks, "credentials");
+  assert.equal(c.level, "unknown");
+  assert.doesNotMatch(c.detail, /Nothing can be collected/);
+  assert.match(c.detail, /imported data/);
+});
+
+test("a missing sign-in IS broken when something is scheduled to fetch", () => {
+  const checks = buildStatus(input({ scheduledSources: 1, credentialsPresent: false }));
+  assert.equal(find(checks, "credentials").level, "bad");
 });

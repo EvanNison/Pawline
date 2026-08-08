@@ -117,6 +117,14 @@ export async function GET(req: NextRequest) {
   // Judge every stored pet, not only the ones a source just wrote to. An
   // imported pet has no scheduled source and would otherwise never be assessed.
   // Idempotent, so pets already handled above cost a re-read and nothing more.
+  // Recorded as a run in its own right when nothing was scheduled to fetch.
+  // Otherwise an import-only install writes no run at all, and /status can never
+  // confirm the nightly job happened — it would say "never collected" forever
+  // while quietly working.
+  const alertRunId = sources.length === 0
+    ? await startRun("alerts", req.headers.get("authorization") ? "cron" : "manual")
+    : null;
+
   const evaluated: string[] = [];
   for (const pet of await listPets()) {
     try {
@@ -126,6 +134,10 @@ export async function GET(req: NextRequest) {
       anyFailure = true;
       summary.push({ pet: pet.name, error: `alerting failed: ${String(e).slice(0, 200)}` });
     }
+  }
+
+  if (alertRunId !== null) {
+    await finishRun(alertRunId, !anyFailure, 0, anyFailure ? "alert evaluation failed" : undefined);
   }
 
   await deliverPendingAlerts(settings.units);

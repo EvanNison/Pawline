@@ -3,7 +3,7 @@ import NotConfigured from "@/components/NotConfigured";
 import Link from "next/link";
 import { ensureSchema, sql } from "@/lib/db";
 import { readSettings } from "@/lib/settings";
-import { listPets, readSeries } from "@/lib/store";
+import { listPets, readJournal, readSeries } from "@/lib/store";
 import { availableMetrics, MIN_WEAR_MINUTES, WEAR_SENSITIVE, type Species } from "@/lib/metrics";
 import { ACCRUING, alertSeries, isAlertVisible } from "@/lib/alerting";
 import { hasSufficientHistory } from "@/lib/baseline";
@@ -108,6 +108,8 @@ export default async function Home() {
     today
   );
 
+  const notes = await readJournal(pet.id, 8);
+
   const alertRows = await s`select id, date::text as date, metric, direction, value,
       baseline_median, severity, acknowledged, emailed, resolved, note, muted
     from alerts where pet_id = ${pet.id} order by date desc limit 200`;
@@ -192,6 +194,24 @@ export default async function Home() {
           <TrendChart key={c.metric} title={c.label} unit={c.unit} points={c.points} />
         ))}
       </section>
+
+      {notes.length > 0 && (
+        // Shown beneath the charts, because a note's whole purpose is to explain
+        // one of them. Written and never displayed, this was a careful way to
+        // lose information.
+        <section className="rounded-xl border border-zinc-200 p-4 text-sm dark:border-zinc-800">
+          <h2 className="font-semibold">Recent notes</h2>
+          <ul className="mt-2 space-y-1 text-zinc-600 dark:text-zinc-400">
+            {notes.map((n) => (
+              <li key={n.id}>
+                <span className="text-zinc-400">{n.date}</span>{" "}
+                <span className="rounded bg-zinc-100 px-1 text-xs dark:bg-zinc-800">{n.category}</span>{" "}
+                {n.note}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <p className="text-xs text-zinc-500">
         Trends from a consumer tracker, compared against {pet.name}&apos;s own usual ranges.

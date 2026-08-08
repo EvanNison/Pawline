@@ -94,7 +94,7 @@ Working, and verified against a real Postgres:
 
 - [x] Baselines, alerting, timezone/DST handling, units, migrations
 - [x] Password-protected pages and Server Actions
-- [x] Encrypted credentials, resumable importer, CSV source
+- [x] Encrypted credentials and the CSV source
 - [x] Collector with gap repair, and the Tractive adapter behind its gate
 - [x] Dashboard, status, alerts and setup pages
 - [x] CSV import through the browser, verified end to end against a real database
@@ -110,6 +110,9 @@ Not done:
 - [ ] Never run against a real tracker account for a sustained period. This is
       the big one — the analysis is proven on synthetic data only.
 - [ ] EU Data Act importer
+- [ ] Chunked backfill of a long vendor history. `src/lib/importer.ts` holds
+      the resumable state machine and is tested, but nothing calls it yet —
+      the collector repairs a 14-day window rather than walking years.
 - [ ] Hour-of-day activity heatmap. It needs hourly readings, which only a
       vendor API supplies — a spreadsheet cannot carry them — so it would be
       permanently blank for the import-only setup this project leads with.

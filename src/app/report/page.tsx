@@ -3,7 +3,7 @@ import { requireSession } from "@/lib/session";
 import NotConfigured from "@/components/NotConfigured";
 import { ensureSchema } from "@/lib/db";
 import { readSettings } from "@/lib/settings";
-import { listPets, readSeries } from "@/lib/store";
+import { listPets, readJournal, readSeries } from "@/lib/store";
 import {
   availableMetrics,
   metric as metricDef,
@@ -136,6 +136,10 @@ export default async function ReportPage({
     })
     .filter((r) => r.last30 !== null);
 
+  // A year of notes: the context that turns "activity fell in March" from a
+  // mystery into an answer, and the part of this page a vet can actually use.
+  const notes = await readJournal(pet.id, 40, addDays(today, -365));
+
   const flaggedRows = rows.filter((r) => r.flagged);
   const comparable = rows.filter((r) => r.change !== null);
   const charted = rows.filter((r) => r.series.length >= 60).slice(0, 4);
@@ -257,6 +261,21 @@ export default async function ReportPage({
               />
             );
           })}
+        </section>
+      )}
+
+      {notes.length > 0 && (
+        <section className="text-sm">
+          <h2 className="mb-2 font-semibold">Owner notes, past year</h2>
+          <ul className="space-y-1 text-zinc-700 dark:text-zinc-300">
+            {notes.map((n) => (
+              <li key={n.id}>
+                <span className="text-zinc-500">{n.date}</span>{" "}
+                <span className="rounded bg-zinc-100 px-1 text-xs dark:bg-zinc-800">{n.category}</span>{" "}
+                {n.note}
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

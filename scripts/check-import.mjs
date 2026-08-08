@@ -103,6 +103,28 @@ try {
     `selected ${availableMetrics(rex?.species ?? "unknown", rex?.capabilities ?? []).length} metrics from ${JSON.stringify(rex?.capabilities)}`
   );
 
+  // Capabilities must be a real jsonb ARRAY, not a jsonb string containing array
+  // text. `${JSON.stringify(x)}::jsonb` produces the latter, which every array
+  // operator then mangles -- appending to one loses the existing capabilities
+  // entirely. A defensive reader hid this for a long time.
+  const { addCapability } = await import("../src/lib/store.ts");
+  const [kind] = await admin.unsafe(
+    `select jsonb_typeof(capabilities) as t from ${SCHEMA}.pets where id = 'csv:Rex'`
+  );
+  check("capabilities is stored as a jsonb array", kind.t === "array", `jsonb_typeof = ${kind.t}`);
+
+  await addCapability("csv:Rex", "weight");
+  await addCapability("csv:Rex", "weight"); // idempotent
+  const afterCap = (await listPets()).find((p) => p.id === "csv:Rex");
+  check("adding a capability keeps the existing ones", afterCap.capabilities.includes("resting_heart_rate"),
+    JSON.stringify(afterCap.capabilities));
+  check("adding a capability adds the new one exactly once",
+    afterCap.capabilities.filter((c) => c === "weight").length === 1,
+    JSON.stringify(afterCap.capabilities));
+  check("a hand-logged metric becomes visible to the dashboard",
+    availableMetrics(afterCap.species, afterCap.capabilities).some((m) => m.key === "weight"),
+    "weight still filtered out");
+
   // An unknown metric must be refused by the bulk path too, not just the single.
   const refused = await writeReadingsBulk("csv:Rex", "csv", [
     { petKey: "Rex", date: "2026-09-09", metric: "not_a_real_metric", value: 1 },

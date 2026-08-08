@@ -94,22 +94,37 @@ export async function deliverPendingAlerts(units: "metric" | "imperial"): Promis
   if (pending.length === 0) return;
   if (!(await isEmailConfigured())) return;
 
-  const records: AlertRecord[] = pending.map((a) => ({
-    id: Number(a.id),
-    date: a.date as string,
-    metric: a.metric as string,
-    direction: a.direction as string,
-    value: a.value === null ? null : Number(a.value),
-    baseline_median: a.baseline_median === null ? null : Number(a.baseline_median),
-    severity: a.severity as string,
-    days_outside: a.days_outside === null ? null : Number(a.days_outside),
-    note: (a.note as string | null) ?? null,
-    resolved: Boolean(a.resolved),
-  }));
+  // One email per pet. A single email covering everyone was titled with
+  // whichever pet happened to sort first, so in a two-animal household an alert
+  // about one arrived under the other's name — and the whole point of the email
+  // is to tell you which animal to look at.
+  const byPet = new Map<string, typeof pending>();
+  for (const row of pending) {
+    const name = String(row.pet ?? "your pet");
+    const list = byPet.get(name);
+    if (list) list.push(row);
+    else byPet.set(name, [row] as typeof pending);
+  }
 
-  const petName = String(pending[0].pet ?? "your pet");
-  const { sent } = await sendAlertEmail(petName, records, units);
-  if (sent) {
-    await s`update alerts set emailed = true where id = any(${records.map((r) => r.id)})`;
+  for (const [petName, rows] of byPet) {
+    const records: AlertRecord[] = rows.map((a) => ({
+      id: Number(a.id),
+      date: a.date as string,
+      metric: a.metric as string,
+      direction: a.direction as string,
+      value: a.value === null ? null : Number(a.value),
+      baseline_median: a.baseline_median === null ? null : Number(a.baseline_median),
+      severity: a.severity as string,
+      days_outside: a.days_outside === null ? null : Number(a.days_outside),
+      note: (a.note as string | null) ?? null,
+      resolved: Boolean(a.resolved),
+    }));
+
+    // Marked per pet, so one pet's send failing does not silence another's
+    // alerts by flagging them as delivered.
+    const { sent } = await sendAlertEmail(petName, records, units);
+    if (sent) {
+      await s`update alerts set emailed = true where id = any(${records.map((r) => r.id)})`;
+    }
   }
 }

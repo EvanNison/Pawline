@@ -47,6 +47,11 @@ export interface StatusInput {
    * a Gmail user to go and check a Resend key they have never owned.
    */
   emailChannel: Channel;
+  /**
+   * Whether any source is set to fetch on a schedule. False is a legitimate
+   * configuration — an import-only install — not a fault.
+   */
+  scheduledSources: number;
   undeliveredAlerts: number;
   credentialsPresent: boolean;
   petCount: number;
@@ -225,15 +230,26 @@ function routeFix(channel: Channel): string {
 export function buildStatus(input: StatusInput): Check[] {
   const checks: Check[] = [collectionCheck(input)];
 
+  // Only a fault when something is actually meant to be fetched. Telling an
+  // import-only owner their setup is "broken" for lacking a vendor login is
+  // both false and a nudge toward the one option that carries a real risk.
   checks.push(
     input.credentialsPresent
       ? { id: "credentials", label: "Tractive sign-in", level: "ok", detail: "Saved." }
-      : {
-          id: "credentials",
-          label: "Tractive sign-in",
-          level: "bad",
-          detail: "No saved sign-in. Nothing can be collected until you enter it in Setup.",
-        }
+      : input.scheduledSources === 0
+        ? {
+            id: "credentials",
+            label: "Automatic collection",
+            level: "unknown",
+            detail:
+              "No tracker connected — running on imported data. That is a choice, not a fault. Readings are still judged daily; upload a new file when you have one.",
+          }
+        : {
+            id: "credentials",
+            label: "Tractive sign-in",
+            level: "bad",
+            detail: "No saved sign-in. Nothing can be collected until you enter it in Setup.",
+          }
   );
 
   checks.push(

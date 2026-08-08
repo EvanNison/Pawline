@@ -51,11 +51,28 @@ It will look something like `k3Jd9...==` and be about 44 characters.
 Click **Deploy with Vercel** in the README. It will:
 
 1. Ask you to sign in and copy the project to your GitHub account.
-2. Offer to add a **Neon** database — accept. This is the free Postgres that
-   stores your data.
-3. Ask for the three values from Step 1.
+2. Ask for the three values from Step 1.
 
 Then it builds for a couple of minutes and gives you a web address.
+
+## Step 2b — Add the database
+
+Open the address. It will say the database isn't connected yet. That is the
+expected next step, not a fault.
+
+In the Vercel dashboard for your new project:
+
+1. Go to **Storage → Create Database**.
+2. Choose **Neon** (Postgres). The free plan is enough.
+3. Connect it to this project when asked.
+
+Vercel fills in `DATABASE_URL` for you. Then go to **Deployments**, open the
+**⋯** menu on the most recent one, and choose **Redeploy** so it picks the new
+setting up. Reload your address and the app will be running.
+
+> Why isn't this automatic? Because a deploy button that half-provisions a
+> database and silently fails is worse than one that tells you plainly what to
+> click. Two clicks, once.
 
 ## Step 3 — Open your site and finish setup
 

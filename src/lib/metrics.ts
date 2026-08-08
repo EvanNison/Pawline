@@ -160,7 +160,7 @@ export const REGISTRY: MetricDef[] = [
     direction: "both",
     alert: true,
     species: ["dog", "cat"],
-    help: "The single most vet-relevant trend. Log it manually if your tracker doesn't report it.",
+    help: "A trend vets routinely ask about, and one trackers rarely record. Log it manually if yours doesn't.",
     min: 0,
   },
   {
@@ -170,7 +170,7 @@ export const REGISTRY: MetricDef[] = [
     direction: "high_bad",
     alert: true,
     species: ["dog", "cat"],
-    help: "Time spent scratching. A sustained rise often precedes a visible skin or allergy problem.",
+    help: "Time spent scratching. A sustained rise is worth mentioning to your vet; what it means is theirs to say, not this app's.",
     min: 0,
     max: DAY_MINUTES,
   },

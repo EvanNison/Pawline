@@ -20,7 +20,11 @@ export type Channel = "gmail" | "resend" | "none";
 interface GmailConfig {
   kind: "gmail";
   user: string;
-  /** A Google App Password: scoped to mail, revocable, not the account password. */
+  /**
+   * A Google App Password. Revocable without changing the account password,
+   * but not narrowly scoped: Google describes it as granting access to the
+   * Google account, so it is stored and handled as a real credential.
+   */
   appPassword: string;
   to: string;
 }

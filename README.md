@@ -17,14 +17,15 @@ and tells you when something drifts away from it.
 
 ## Deploy it
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FEvanNison%2FPawline&env=APP_PASSWORD,ENCRYPTION_KEY,CRON_SECRET&envDescription=Three%20secrets%20you%20generate%20yourself%20—%20see%20the%20setup%20guide&envLink=https%3A%2F%2Fgithub.com%2FEvanNison%2FPawline%2Fblob%2Fmain%2Fdocs%2FSETUP.md&stores=%5B%7B%22type%22%3A%22postgres%22%7D%5D)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FEvanNison%2FPawline&env=APP_PASSWORD,ENCRYPTION_KEY,CRON_SECRET&envDescription=Three%20secrets%20you%20generate%20yourself%20—%20see%20the%20setup%20guide&envLink=https%3A%2F%2Fgithub.com%2FEvanNison%2FPawline%2Fblob%2Fmain%2Fdocs%2FSETUP.md)
 
-One click gets you a copy, a free Postgres database, and a running site. It asks
-for three values you generate yourself — [**the setup guide**](docs/SETUP.md)
-walks through it, and is written to be pasted to an AI assistant if you're not
-a developer.
+This copies the repository, asks for three values you generate yourself, and
+deploys. You then add a free Postgres database from the Vercel dashboard —
+two clicks, and the app tells you exactly when and how.
 
-Everything else is configured in the browser. There is no terminal step.
+[**The setup guide**](docs/SETUP.md) walks through the whole thing and is
+written to be pasted to an AI assistant if you're not a developer. Everything
+after deploying is configured in the browser; there is no terminal step.
 
 ## What it does
 
@@ -84,16 +85,28 @@ path, with none of this risk.
 
 ## Status
 
-Runnable. The analysis core, collection, alerting and all four pages work.
+**Experimental.** Treat this as statistical anomaly detection over pet tracker
+data, not as something shown to find health problems early. The detector is a
+robust-statistics heuristic; it has not been calibrated against real outcomes,
+and no false-alert rate is published because none has been measured.
+
+Working, and verified against a real Postgres:
 
 - [x] Baselines, alerting, timezone/DST handling, units, migrations
+- [x] Password-protected pages and Server Actions
 - [x] Encrypted credentials, resumable importer, CSV source
 - [x] Collector with gap repair, and the Tractive adapter behind its gate
 - [x] Dashboard, status, alerts and setup pages
-- [x] One-click deploy
+- [x] Every SQL query checked against the real schema (`npm run check:sql`)
+
+Not done:
+
+- [ ] Never run against a real tracker account for a sustained period. This is
+      the big one — the analysis is proven on synthetic data only.
 - [ ] EU Data Act importer
 - [ ] CSV upload through the browser (the parser exists; the page does not)
-- [ ] Not yet run against a real account for a sustained period
+- [ ] Statistical calibration: no measured false-alert rate, no detection-delay
+      figure, no handling of seasonality or day-to-day autocorrelation
 
 ## Development
 

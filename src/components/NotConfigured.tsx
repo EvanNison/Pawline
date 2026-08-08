@@ -15,12 +15,14 @@ export default function NotConfigured({ detail }: { detail?: string }) {
       <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
         <p className="font-medium">The database isn&apos;t connected yet.</p>
         <p className="mt-2">
-          If you have just deployed, this usually means the Postgres database is still
-          being created, or was not added during setup. Wait a minute and reload.
+          This is the expected next step after deploying, not a fault. Add one from the
+          Vercel dashboard: <strong>Storage → Create Database → Neon</strong> (the free plan
+          is enough), and connect it to this project. Vercel then sets{" "}
+          <code>DATABASE_URL</code> for you.
         </p>
         <p className="mt-2">
-          If it persists, check that <code>DATABASE_URL</code> is set in your project&apos;s
-          environment variables, then redeploy.
+          Redeploy afterwards, from <strong>Deployments → ⋯ → Redeploy</strong>, so the new
+          setting is picked up. If you have just done that, wait a minute and reload.
         </p>
         {detail && <p className="mt-2 text-xs opacity-75">Reported: {detail}</p>}
       </div>

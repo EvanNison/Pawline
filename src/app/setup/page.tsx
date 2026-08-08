@@ -4,7 +4,7 @@ import Link from "next/link";
 import NotConfigured from "@/components/NotConfigured";
 import { ensureSchema, sql } from "@/lib/db";
 import { readSettings, writeSetting } from "@/lib/settings";
-import { protect } from "@/lib/secrets";
+import { encryptionKey, protect } from "@/lib/secrets";
 import { acknowledgementFor, recordAcknowledgement, setEnabled, TRACTIVE_SOURCE_INFO } from "@/lib/sources/registry";
 import { isValidTimezone } from "@/lib/time";
 
@@ -131,7 +131,9 @@ export default async function SetupPage({
           <p className="text-xs text-zinc-500">
             You are emailing yourself, so your own mailbox is the simplest route. Needs a Google{" "}
             <a className="underline" href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer">App Password</a>,
-            not your normal password — it only permits sending mail and can be revoked any time.
+            not your normal password. It can be revoked at any time without changing your password —
+            but Google is clear that an App Password grants access to your Google account, so treat
+            it as a real credential and use one created solely for Pawline.
           </p>
           <input name="gmail_user" type="email" placeholder="you@gmail.com" className={field} />
           <input name="gmail_app_password" type="password" autoComplete="off" placeholder="app password" className={field} />
@@ -141,9 +143,14 @@ export default async function SetupPage({
 
       <form action={enableTractive} className="space-y-4 rounded-xl border border-amber-300 p-4 dark:border-amber-800">
         <h2 className="font-semibold">Connect a Tractive account</h2>
+        {/* "Saved", not "connected": nothing here has spoken to Tractive. The
+            login is first used by the overnight collection, so a typo reads as
+            success now and surfaces as a failure a day later. /status is the
+            page that knows, and it is the one to send people to. */}
         {ack && (
           <p className="text-xs text-emerald-700 dark:text-emerald-300">
-            Acknowledged {new Date(ack.acceptedAt).toLocaleDateString()} — connected.
+            Acknowledged {new Date(ack.acceptedAt).toLocaleDateString()} — login saved. It has not
+            been tested yet; the first collection will use it. Check <Link className="underline" href="/status">Status</Link> afterwards.
           </p>
         )}
         <div className="whitespace-pre-line rounded-lg bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-100">
@@ -156,7 +163,14 @@ export default async function SetupPage({
         <div>
           <label className="block text-sm font-medium" htmlFor="tractive_password">Tractive password</label>
           <input id="tractive_password" name="tractive_password" type="password" autoComplete="off" className={field} />
-          <p className="mt-1 text-xs text-zinc-500">Stored encrypted. Never shown again.</p>
+          {/* Said conditionally, because protect() returns plaintext when no key
+              is set. Promising encryption that is not happening is worse than
+              admitting it: it is a claim about where someone's password lives. */}
+          <p className="mt-1 text-xs text-zinc-500">
+            {encryptionKey()
+              ? "Stored encrypted. Never shown again."
+              : "Never shown again — but stored unencrypted, because no ENCRYPTION_KEY is set. Add one and it is encrypted on the next collection."}
+          </p>
         </div>
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" name="accept" className="mt-1" />

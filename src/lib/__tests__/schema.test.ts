@@ -131,7 +131,12 @@ test("schema records what a status page needs", () => {
   // stopped is lost on the next read, and a capped job looks complete.
   assert.match(sql, /finished_reason/, "import_jobs must persist why it stopped");
   assert.match(sql, /days_with_data/, "and how many days actually held data");
-  assert.match(sql, /ciphertext/, "credentials must be stored encrypted");
+  // Credentials are NOT guaranteed by the schema. They live in app_config,
+  // encrypted by protect() on the write path, and that guarantee is tested in
+  // crypto.test.ts and secrets.test.ts where it actually lives. A dedicated
+  // table asserted here for a long time and was never written to once — the
+  // assertion was checking a promise nothing kept.
+  assert.match(sql, /create table app_config/);
   assert.doesNotMatch(sql, /weight_lb|distance_mi/, "no unit baked into a column name");
 });
 

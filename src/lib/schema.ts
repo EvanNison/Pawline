@@ -97,8 +97,12 @@ export const MIGRATIONS: Migration[] = [
         note        text not null,
         created_at  timestamptz not null default now()
       )`,
-      // Raw vendor payloads, kept forever. Parsing can always be re-run; a
-      // payload that was never captured is gone for good.
+      // Intended for raw vendor payloads, so parsing can be re-run later — a
+      // payload never captured is gone for good.
+      //
+      // NOTHING WRITES THIS YET. The table is here because adding it later
+      // cannot recover payloads that were already discarded, but do not read
+      // its existence as a promise that raw data is being kept. It is not.
       `create table snapshots (
         id          bigserial primary key,
         pet_id      text references pets(id) on delete cascade,
@@ -110,13 +114,6 @@ export const MIGRATIONS: Migration[] = [
       `create table app_config (
         key         text primary key,
         value       text not null,
-        updated_at  timestamptz not null default now()
-      )`,
-      // Credentials are stored encrypted (AES-GCM). The column holds the
-      // ciphertext envelope, never a readable password.
-      `create table source_credentials (
-        source_id   text primary key,
-        ciphertext  text not null,
         updated_at  timestamptz not null default now()
       )`,
       // Every collection or import attempt is recorded, successful or not.
@@ -137,6 +134,10 @@ export const MIGRATIONS: Migration[] = [
       `create index runs_recent on runs (source_id, started_at desc)`,
       // Resumable history import. A full backfill is thousands of requests and
       // cannot complete in one serverless invocation, so progress lives here.
+      //
+      // The state machine in importer.ts is written and tested against this
+      // shape, but nothing invokes it yet — the collector repairs a 14-day
+      // window rather than walking years. Listed as not-done in the README.
       `create table import_jobs (
         id            bigserial primary key,
         pet_id        text not null references pets(id) on delete cascade,

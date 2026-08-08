@@ -124,7 +124,7 @@ Not done:
 
 ```bash
 npm install
-npm test              # 214 tests, no database needed
+npm test              # 215 tests, no database needed
 npm run typecheck
 npm run dev
 ```

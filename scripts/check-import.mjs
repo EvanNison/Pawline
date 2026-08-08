@@ -209,6 +209,35 @@ try {
   );
   check("unmuting lifts it again", afterUnmute.muted === false, `muted = ${afterUnmute.muted}`);
 
+  // Freshness masking, third attempt -- verified against a server rather than
+  // reasoned about, because min() ignoring nulls is exactly what defeated the
+  // previous two. Two pets both advertising a metric, only one with readings:
+  // the metric must read as never-arrived, not current.
+  await upsertPet("csv", { key: "HasData", name: "HasData", species: "dog", timezone: "UTC",
+    capabilities: ["resting_heart_rate"] }, "UTC");
+  await upsertPet("csv", { key: "NoData", name: "NoData", species: "dog", timezone: "UTC",
+    capabilities: ["resting_heart_rate"] }, "UTC");
+  await writeReadingsBulk("csv:HasData", "csv", [
+    { petKey: "HasData", date: "2026-08-08", metric: "resting_heart_rate", value: 61 },
+  ]);
+  const [fresh] = await admin.unsafe(`
+    select m.metric,
+      (case when count(*) filter (where d.newest is null) > 0
+            then null else min(d.newest) end)::text as newest
+    from (
+      select p.id as pet_id, c.metric
+      from ${SCHEMA}.pets p, lateral jsonb_array_elements_text(p.capabilities) as c(metric)
+    ) m
+    left join (
+      select pet_id, metric, max(date) as newest
+      from ${SCHEMA}.daily_metrics where metric not like 'raw.%'
+      group by pet_id, metric
+    ) d on d.pet_id = m.pet_id and d.metric = m.metric
+    where m.metric = 'resting_heart_rate'
+    group by m.metric`);
+  check("a pet with no readings is not masked by one that has them",
+    fresh.newest === null, `got ${fresh.newest} -- one pet's data hid the other's silence`);
+
   // The gate that protects someone's subscription, proved against a real
   // database rather than a mock. Setting the enabled flag alone must not be
   // enough: without a recorded acknowledgement the source must stay dark.

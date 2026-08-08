@@ -73,11 +73,13 @@ export async function raiseAndWithdrawAlerts(petId: string, today: string, muted
     await s`update alerts set resolved = true, resolved_at = now()
       where pet_id = ${petId} and metric = ${metric}
         and acknowledged = false and resolved = false and emailed = true`;
-    // Undelivered rows stay until they are sent, or until the grace period ends.
+    // Undelivered rows are marked resolved too, and still sent: delivery does
+    // not filter on resolved, and renderAlertLine says "has since returned to
+    // normal" when it is set. Leaving them unresolved meant an alert the app
+    // had positive evidence had ended was emailed as though it were live.
     await s`update alerts set resolved = true, resolved_at = now()
       where pet_id = ${petId} and metric = ${metric}
-        and acknowledged = false and resolved = false and emailed = false
-        and date < ${today}::date - 14`;
+        and acknowledged = false and resolved = false and emailed = false`;
   }
 }
 
@@ -94,8 +96,10 @@ export async function deliverPendingAlerts(
   muted: string[] = []
 ): Promise<void> {
   const s = sql();
-  // Muting is applied from the CURRENT setting, not from the flag stored on the
-  // row. The flag is only refreshed while a deviation is still being detected,
+  // Muting is applied SOLELY from the current setting, never from the flag
+  // stored on the row -- that flag exists to show "notifications muted" in the
+  // history and is a snapshot of the past. Testing both meant an alert created
+  // while muted stayed undeliverable forever once unmuted. The flag is only refreshed while a deviation is still being detected,
   // so a queued alert for a metric that has since settled kept whatever value it
   // was created with — and muting a noisy measurement did not stop the email
   // already waiting to go out, which is exactly the case someone mutes for.
@@ -103,7 +107,7 @@ export async function deliverPendingAlerts(
       a.baseline_median, a.severity, a.days_outside, a.note, a.resolved, p.name as pet
     from alerts a join pets p on p.id = a.pet_id
     where a.emailed = false and a.acknowledged = false
-      and a.muted = false and a.metric <> all(${muted})
+      and a.metric <> all(${muted})
     order by a.date desc limit 50`;
   if (pending.length === 0) return;
   if (!(await isEmailConfigured())) return;

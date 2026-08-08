@@ -122,16 +122,23 @@ export default async function Home({
   const alertRows = await s`select id, date::text as date, metric, direction, value,
       baseline_median, severity, acknowledged, emailed, resolved, note, muted
     from alerts where pet_id = ${pet.id} order by date desc limit 200`;
-  const visible = alertRows.filter((a) =>
-    isAlertVisible(
-      {
-        date: a.date as string,
-        emailed: Boolean(a.emailed),
-        acknowledged: Boolean(a.acknowledged),
-        resolved: Boolean(a.resolved),
-      },
-      today
-    )
+  // Dismissed alerts are excluded here, not merely de-emphasised. isAlertVisible
+  // deliberately keeps a recent row visible on the intent that the panel would
+  // grey it out; the panel never did, so a dismissed warning looked identical to
+  // a live one and pressing dismiss appeared to do nothing for a fortnight. The
+  // full record, dismissals included, is on /alerts where it belongs.
+  const visible = alertRows.filter(
+    (a) =>
+      !a.acknowledged &&
+      isAlertVisible(
+        {
+          date: a.date as string,
+          emailed: Boolean(a.emailed),
+          acknowledged: Boolean(a.acknowledged),
+          resolved: Boolean(a.resolved),
+        },
+        today
+      )
   );
 
   return (

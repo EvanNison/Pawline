@@ -47,11 +47,12 @@ function extractQueries(src, file) {
   const found = [];
   for (let i = 0; i < src.length; i++) {
     if (src[i] !== "`") continue;
-    // Both call shapes are tags here: `s\`…\`` where s is a client, and
-    // `sql()\`…\`` where sql() returns one. Missing the second silently left 18
-    // queries unchecked while the README claimed every query was covered —
-    // which is worse than no checker, because it is believed.
-    const tag = /(^|[^A-Za-z0-9_$.])(sql|s)(\(\))?$/.exec(src.slice(0, i));
+    // Every tag shape a client can take here: `s\`…\`` and `reserved\`…\`` where
+    // the variable is a client, and `sql()\`…\`` where a call returns one.
+    // Missing a shape is silent, and twice has left whole files unchecked while
+    // the README claimed full coverage — a checker that quietly skips things is
+    // worse than no checker, because it is believed.
+    const tag = /(^|[^A-Za-z0-9_$.])(sql|s|reserved)(\(\))?$/.exec(src.slice(0, i));
     if (!tag) continue;
 
     let j = i + 1;

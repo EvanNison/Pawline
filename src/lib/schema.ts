@@ -9,6 +9,13 @@
  *
  * Rules:
  *   - Migrations are append-only. Never edit a shipped migration; add another.
+ *
+ *     "Shipped" means published. Migration 1 was edited freely before the first
+ *     public release — it is the initial schema, and no database anywhere was
+ *     created from an earlier draft of it. From the first public tag onward the
+ *     rule is absolute: a database in the wild has already run migration 1 as
+ *     it stood, and editing it means those installs never receive the change
+ *     while LATEST_VERSION says they are up to date.
  *   - Each runs inside a transaction, and the version bump is in that same
  *     transaction, so a failure leaves the database on the previous version
  *     rather than half-migrated.

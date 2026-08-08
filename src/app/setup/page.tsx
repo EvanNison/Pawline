@@ -34,6 +34,16 @@ async function saveBasics(formData: FormData) {
   await writeSetting("units", units === "imperial" ? "imperial" : "metric");
   await writeSetting("species", species);
   if (tz && isValidTimezone(tz)) await writeSetting("timezone", tz);
+
+  // Pets carry their own species and timezone, and every page reads those
+  // rather than these settings. Writing only to app_config meant the change
+  // took effect at the next import or collection and appeared to do nothing
+  // until then — on a setting whose whole job is deciding which day a reading
+  // belongs to.
+  await sql()`update pets set species = ${species}, updated_at = now()`;
+  if (tz && isValidTimezone(tz)) {
+    await sql()`update pets set timezone = ${tz}, updated_at = now()`;
+  }
   // Written even when blank, so these can be turned OFF. Skipping empty values
   // meant an address or a Gmail login could be set and never removed: clearing
   // the field looked like it worked and the next run still emailed, using a
@@ -70,11 +80,36 @@ async function enableTractive(formData: FormData) {
   redirect("/setup?status=tractive_on");
 }
 
+/**
+ * Turn Tractive off and delete the stored login.
+ *
+ * The gate could be opened and never closed: enabling was reachable, disabling
+ * existed in the registry and no screen called it, and the credential could be
+ * replaced but never removed. For the one source in this app that can cost
+ * someone their subscription, "you may turn this on" without "you may turn this
+ * off" is not an acceptable pair.
+ *
+ * The acknowledgement record is kept. It is the dated evidence that the warning
+ * was read, and deleting it would erase that rather than undo it.
+ */
+async function disconnectTractive() {
+  "use server";
+  await requireSession();
+  await ensureSchema();
+  await setEnabled("tractive", false);
+  await sql()`delete from app_config where key = 'source:tractive:credentials'`;
+  redirect("/setup?status=tractive_off");
+}
+
 const MESSAGES: Record<string, { ok: boolean; text: string }> = {
   saved: { ok: true, text: "✅ Saved." },
   tractive_on: {
     ok: true,
     text: "✅ Tractive login saved and collection enabled. It has not been tested yet — the first run will use it, so check Status afterwards.",
+  },
+  tractive_off: {
+    ok: true,
+    text: "✅ Tractive disconnected and the saved login deleted. Nothing further will be collected from it. Your stored history is untouched.",
   },
   not_accepted: { ok: false, text: "❌ Not enabled — the acknowledgement was not ticked." },
   missing_login: { ok: false, text: "❌ Please enter both the email and password." },
@@ -98,6 +133,10 @@ export default async function SetupPage({
   }
   const settings = await readSettings();
   const ack = await acknowledgementFor("tractive");
+  // Only offer to disconnect when there is something stored to disconnect.
+  const [storedCred] = await sql()`select 1 as present from app_config
+    where key = 'source:tractive:credentials'`;
+  const credsStored = Boolean(storedCred);
   const msg = status ? MESSAGES[status] : null;
 
   const field = "mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900";
@@ -138,8 +177,10 @@ export default async function SetupPage({
           <label className="block text-sm font-medium" htmlFor="timezone">Your pet&apos;s timezone</label>
           <input id="timezone" name="timezone" defaultValue={settings.timezone} placeholder="Europe/London" className={field} />
           <p className="mt-1 text-xs text-zinc-500">
-            Decides which day each reading belongs to. Set it once and leave it — changing it
-            later re-partitions history that is already stored.
+            Decides which day each reading belongs to. Set it once and leave it: changing it
+            applies to readings collected from now on, and does <b>not</b> rewrite days that
+            are already stored — so a change now leaves a seam in the history rather than
+            correcting it.
           </p>
         </div>
         <div>
@@ -225,6 +266,20 @@ export default async function SetupPage({
           Enable Tractive collection
         </button>
       </form>
+
+      {credsStored && (
+        <form action={disconnectTractive} className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+          <h2 className="font-semibold">Disconnect Tractive</h2>
+          <p className="mt-1 text-xs text-zinc-500">
+            Stops all collection from Tractive and deletes the saved login. Your stored
+            history stays exactly where it is — this disconnects the source, it does not
+            erase your pet&rsquo;s data.
+          </p>
+          <button type="submit" className="mt-3 rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-700 dark:border-red-800 dark:text-red-300">
+            Disconnect and delete the saved login
+          </button>
+        </form>
+      )}
     </main>
   );
 }

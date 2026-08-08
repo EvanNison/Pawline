@@ -82,7 +82,13 @@ export default async function StatusPage() {
   // vanish from the comparison, so another pet's current reading made the
   // metric look current for everyone. A left join keeps that pet in, with a
   // null date, which is the honest answer: nothing has ever arrived.
-  const freshRows = await s`select m.metric, min(d.newest)::text as newest
+  // The `case` is load-bearing: Postgres min() IGNORES nulls, so a left join
+  // alone silently did nothing and a pet with no readings kept being masked by
+  // one that had them. Verified against a real server, not reasoned about —
+  // this is the third attempt at this one bug.
+  const freshRows = await s`select m.metric,
+      (case when count(*) filter (where d.newest is null) > 0
+            then null else min(d.newest) end)::text as newest
     from (
       select p.id as pet_id, c.metric
       from pets p, lateral jsonb_array_elements_text(p.capabilities) as c(metric)

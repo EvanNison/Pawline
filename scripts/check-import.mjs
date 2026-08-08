@@ -302,6 +302,46 @@ try {
   check("a dismissed alert can still be resolved on evidence",
     dismissedRow !== undefined, "no alert row found");
 
+  // A day with no wear reading, for a pet that DOES report wear, is unknown --
+  // not "worn fine". Counting it as valid let a collar-off day satisfy the
+  // "returned to normal" evidence and support a green dashboard.
+  await upsertPet("csv", { key: "Wear", name: "Wear", species: "dog", timezone: "UTC",
+    capabilities: ["active_minutes", "wear_time"] }, "UTC");
+  const wearDays = [];
+  for (let i = 0; i < 40; i++) {
+    const d = new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10);
+    wearDays.push({ petKey: "Wear", date: d, metric: "active_minutes", value: 90 });
+    // Wear reported for every day except the last three.
+    if (i < 37) wearDays.push({ petKey: "Wear", date: d, metric: "wear_time", value: 1300 });
+  }
+  await writeReadingsBulk("csv:Wear", "csv", wearDays);
+
+  const { alertSeries } = await import("../src/lib/alerting.ts");
+  const { readSeries } = await import("../src/lib/store.ts");
+  const wearRows2 = await admin.unsafe(
+    `select date::text as date, value from ${SCHEMA}.daily_metrics
+     where pet_id = 'csv:Wear' and metric = 'wear_time'`
+  );
+  const seenWear = new Set(wearRows2.map((r) => r.date));
+  const allD = await admin.unsafe(
+    `select distinct date::text as date from ${SCHEMA}.daily_metrics
+     where pet_id = 'csv:Wear' and metric <> 'wear_time'`
+  );
+  const unknownDays = allD.filter((r) => !seenWear.has(r.date)).map((r) => r.date);
+  check("days without a wear reading are identified as unknown",
+    unknownDays.length === 3, `found ${unknownDays.length}, expected 3`);
+
+  const lowWearSet = new Set(unknownDays);
+  // alertSeries drops excluded days rather than nulling them, so the check is
+  // that they are absent from what alerting actually sees.
+  const raw = await readSeries("csv:Wear", "active_minutes");
+  const assessed = alertSeries(raw, "active_minutes", { today: "2026-02-09", lowWear: lowWearSet });
+  const assessedDates = new Set(assessed.map((p) => p.date));
+  check("and their readings never reach the assessment",
+    unknownDays.every((d) => !assessedDates.has(d)),
+    `${raw.length} readings in, ${assessed.length} out; unknown days still present: ` +
+      unknownDays.filter((d) => assessedDates.has(d)).join(", "));
+
   // The gate that protects someone's subscription, proved against a real
   // database rather than a mock. Setting the enabled flag alone must not be
   // enough: without a recorded acknowledgement the source must stay dark.

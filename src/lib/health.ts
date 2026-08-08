@@ -54,6 +54,11 @@ export interface StatusInput {
   scheduledSources: number;
   /** A credential is stored but cannot be decrypted — worse than absent. */
   credentialsUnreadable: boolean;
+  /**
+   * Whether any pet reports how long the tracker was actually worn. Without it,
+   * a quiet day cannot be told apart from a day the collar sat on a table.
+   */
+  wearMeasured: boolean;
   undeliveredAlerts: number;
   credentialsPresent: boolean;
   petCount: number;
@@ -299,6 +304,27 @@ export function buildStatus(input: StatusInput): Check[] {
       detail: `Sending via ${routeName(input.emailChannel)}, nothing waiting to send.`,
     });
   }
+
+  // Said out loud rather than assumed. Totals and counts are only meaningful if
+  // the tracker was on the animal, and with no wear data a low day and a
+  // collar-off day are indistinguishable — so the app should say which of those
+  // it cannot rule out, instead of quietly treating every reading as valid.
+  checks.push(
+    input.wearMeasured
+      ? {
+          id: "wear",
+          label: "Tracker wear",
+          level: "ok",
+          detail: "Wear time is reported, so days the tracker was barely worn are excluded from totals.",
+        }
+      : {
+          id: "wear",
+          label: "Tracker wear",
+          level: "unknown",
+          detail:
+            "No wear-time readings, so a quiet day cannot be told apart from a day the tracker was off. Activity and sleep totals are taken at face value — fine for hand-kept records, worth knowing if your tracker should be reporting wear.",
+        }
+  );
 
   checks.push(...metricChecks(input));
   return checks;

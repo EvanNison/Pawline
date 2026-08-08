@@ -30,6 +30,7 @@ function input(over: Partial<StatusInput> = {}): StatusInput {
     emailChannel: "gmail",
     scheduledSources: 1,
     credentialsUnreadable: false,
+    wearMeasured: true,
     undeliveredAlerts: 0,
     credentialsPresent: true,
     petCount: 1,
@@ -233,4 +234,13 @@ test("a stored but undecryptable credential is reported as broken, not saved", (
   assert.equal(c.level, "bad");
   assert.match(c.detail, /cannot be decrypted/);
   assert.match(c.detail, /ENCRYPTION_KEY/);
+});
+
+// Without wear data a quiet day and a collar-off day look identical. Saying so
+// is the difference between a limitation and a silent assumption.
+test("no wear data is reported as unknown, never as fine", () => {
+  const c = find(buildStatus(input({ wearMeasured: false })), "wear");
+  assert.equal(c.level, "unknown");
+  assert.match(c.detail, /cannot be told apart/);
+  assert.notEqual(overallLevel(buildStatus(input({ wearMeasured: false }))), "ok");
 });

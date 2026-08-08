@@ -40,23 +40,36 @@ const MIN_DAYS_FOR_AVERAGE = 5;
 const FLAG_PCT = 15;
 
 /**
- * Metrics worth putting in front of a vet, and which direction is worrying.
+ * Metrics worth putting in front of a vet, in display order.
  *
- * "both" matters: weight has no safe direction, and leaving it unwatched meant
- * it could never be flagged while still counting as compared — so a report
- * could say "no measurement shifted 15% or more" after an arbitrarily large
- * weight change, which is exactly the change a vet would want named.
+ * The worrying DIRECTION is not listed here — it is read from the metric
+ * registry, which is where alerting gets it. Hardcoding a second copy meant the
+ * two disagreed: the registry calls resting heart and respiratory rate "both",
+ * and this page watched only increases, so a 15% *drop* went unflagged beneath
+ * a green line saying nothing had moved in a concerning direction. Two sources
+ * of truth for "what is worrying" is one too many.
  */
-const REPORT_METRICS: { key: string; watch: "high" | "low" | "both" }[] = [
-  { key: "resting_heart_rate", watch: "high" },
-  { key: "resting_respiratory_rate", watch: "high" },
-  { key: "active_minutes", watch: "low" },
-  { key: "total_sleep_minutes", watch: "low" },
-  { key: "sleep_score", watch: "low" },
-  { key: "sleep_interruptions", watch: "high" },
-  { key: "scratching", watch: "high" },
-  { key: "weight", watch: "both" },
+const REPORT_METRICS: string[] = [
+  "resting_heart_rate",
+  "resting_respiratory_rate",
+  "active_minutes",
+  "total_sleep_minutes",
+  "sleep_score",
+  "sleep_interruptions",
+  "scratching",
+  "weight",
 ];
+
+/** Does a change of this sign, in this metric, deserve a vet's attention? */
+function isConcerning(key: string, change: number): boolean {
+  // total_sleep_minutes is derived and not in the registry; less sleep is the
+  // worrying way for it to move, as for its components.
+  const direction = key === "total_sleep_minutes" ? "low_bad" : metricDef(key)?.direction;
+  if (direction === "both") return true;
+  if (direction === "high_bad") return change > 0;
+  if (direction === "low_bad") return change < 0;
+  return false;
+}
 
 /** Mean over a half-open window, or null when too few days to be worth printing. */
 function avg(series: DayPoint[], from: string, to: string): { value: number; days: number } | null {
@@ -111,9 +124,10 @@ export default async function ReportPage({
   );
 
   const rows = REPORT_METRICS.filter(
-    (m) => m.key === "total_sleep_minutes" || available.has(m.key)
+    (key) => key === "total_sleep_minutes" || available.has(key)
   )
-    .map((m) => {
+    .map((key) => {
+      const m = { key };
       const def = metricDef(m.key);
       const dim = def?.dimension ?? "duration";
       const all = byMetric.get(m.key) ?? [];
@@ -131,11 +145,7 @@ export default async function ReportPage({
       const yearAgo = avg(shown, addDays(today, -395), addDays(today, -335));
       const change = pctChange(last30?.value ?? null, yearAgo?.value ?? null);
       const flagged =
-        change !== null &&
-        Math.abs(change) >= FLAG_PCT &&
-        (m.watch === "both" ||
-          (m.watch === "high" && change > 0) ||
-          (m.watch === "low" && change < 0));
+        change !== null && Math.abs(change) >= FLAG_PCT && isConcerning(m.key, change);
 
       return {
         key: m.key,

@@ -87,6 +87,9 @@ export default async function StatusPage() {
   // alone silently did nothing and a pet with no readings kept being masked by
   // one that had them. Verified against a real server, not reasoned about —
   // this is the third attempt at this one bug.
+  const [{ count: wearRowCount }] = await s`select count(*)::int as count
+    from daily_metrics where metric = 'wear_time'`;
+
   const freshRows = await s`select m.metric,
       (case when count(*) filter (where d.newest is null) > 0
             then null else min(d.newest) end)::text as newest
@@ -123,6 +126,7 @@ export default async function StatusPage() {
     undeliveredAlerts: Number(undelivered),
     credentialsPresent: Boolean(creds) && credsUsable,
     credentialsUnreadable: Boolean(creds) && !credsUsable,
+    wearMeasured: Number(wearRowCount) > 0,
     scheduledSources: (await scheduledSources()).length,
     petCount: Number(petCount),
   });

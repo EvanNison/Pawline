@@ -26,9 +26,34 @@ import { isEmailConfigured, sendAlertEmail, type AlertRecord } from "./notify";
 export async function raiseAndWithdrawAlerts(petId: string, today: string, muted: string[]): Promise<void> {
   const s = sql();
 
-  const lowWearRows = await s`select date::text as date from daily_metrics
-    where pet_id = ${petId} and metric = 'wear_time' and value < ${MIN_WEAR_MINUTES}`;
-  const lowWear = new Set(lowWearRows.map((r) => r.date as string));
+  // Wear that is UNKNOWN is not wear that was fine.
+  //
+  // Selecting only explicitly-low days meant a missing wear reading counted as
+  // a fully worn collar, so a day the tracker was off could raise a false
+  // alert, or — worse — satisfy the "returned to normal" evidence and support a
+  // green dashboard. Absence of evidence read as good news, which is the one
+  // thing this project refuses to do.
+  //
+  // Data-driven rather than capability-driven: if a pet has ever reported wear,
+  // wear is measured for that pet, and a day without a reading is unknown. If it
+  // has never reported wear at all, there is no collar-off confounder to model —
+  // a hand-kept spreadsheet has no such concept — and /status says so rather
+  // than this silently pretending either way.
+  const wearRows = await s`select date::text as date, value from daily_metrics
+    where pet_id = ${petId} and metric = 'wear_time'`;
+  const wearMeasured = wearRows.length > 0;
+  const lowWear = new Set(
+    wearRows.filter((r) => Number(r.value) < MIN_WEAR_MINUTES).map((r) => r.date as string)
+  );
+  if (wearMeasured) {
+    const seen = new Set(wearRows.map((r) => r.date as string));
+    const allDates = await s`select distinct date::text as date from daily_metrics
+      where pet_id = ${petId} and metric <> 'wear_time'`;
+    for (const row of allDates) {
+      const d = row.date as string;
+      if (!seen.has(d)) lowWear.add(d);
+    }
+  }
   const withdrawals: string[] = [];
 
   for (const def of REGISTRY.filter((d) => d.alert)) {

@@ -61,7 +61,10 @@ export async function runImport(
 
   const settings = await readSettings();
   const defaultName = String(formData.get("pet_name") || "").trim() || "My pet";
-  const parsed = parseCsv(text, defaultName);
+  // Today in the pet's own zone, so "the future" means the future where the
+  // animal actually lives rather than in UTC.
+  const today = localDate(settings.timezone);
+  const parsed = parseCsv(text, defaultName, { today });
   const summary = summarizeImport(parsed);
 
   // Reported before anything is written. "Nothing was recognised" and "it
@@ -80,6 +83,7 @@ export async function runImport(
       species: settings.species,
       timezone: settings.timezone,
       defaultPetName: defaultName,
+      today,
     });
 
     // Grouped once rather than filtered per pet: a file with a stray pet column
@@ -106,7 +110,7 @@ export async function runImport(
     // simply not working. Failures here do not fail the import: the readings
     // are stored, and the nightly run evaluates them again.
     for (const petId of petIds) {
-      await raiseAndWithdrawAlerts(petId, localDate(settings.timezone), settings.mutedMetrics).catch(
+      await raiseAndWithdrawAlerts(petId, today, settings.mutedMetrics).catch(
         (e) => console.error("[import] alert evaluation skipped:", String(e).slice(0, 200))
       );
     }
@@ -114,6 +118,14 @@ export async function runImport(
   } catch (e) {
     // Surfaced rather than thrown: a failed import must say so on the page, not
     // become a generic error screen the reader cannot act on.
-    return { ok: false, error: `could not be saved — ${String(e).slice(0, 200)}`, summary };
+    // Deliberately not "nothing was imported": bulk writes commit per chunk, so
+    // some rows may already be stored. Saying otherwise would send someone
+    // looking for data that is there, or leave them believing a half-import is
+    // clean. Re-uploading the same file is safe and is the fix.
+    return {
+      ok: false,
+      error: `stopped partway — ${String(e).slice(0, 160)}. Some rows may already be saved; re-uploading the same file is safe and will finish the job.`,
+      summary,
+    };
   }
 }

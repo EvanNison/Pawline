@@ -258,3 +258,39 @@ test("units that cannot be misread are still accepted bare", () => {
   const { readings } = parseCsv("date,resting_heart_rate,active_minutes\n2026-08-01,62,95");
   assert.equal(readings.length, 2);
 });
+
+// A future-dated reading is not merely untidy. Its age is negative, so the
+// freshness check calls it current, the history gate accepts it, and the
+// dashboard shows a green "nothing unusual" built entirely from days that have
+// not happened. A mis-parsed date column in an export is the ordinary cause.
+test("a reading dated in the future is refused", () => {
+  const { readings, warnings } = parseCsv(
+    ["date,resting_heart_rate", "2030-01-15,62", "2026-08-01,61"].join("\n"),
+    "My pet",
+    { today: "2026-08-08" }
+  );
+  assert.equal(readings.length, 1);
+  assert.equal(readings[0].date, "2026-08-01");
+  assert.match(warnings[0].message, /in the future/);
+});
+
+test("today itself is not the future", () => {
+  const { readings } = parseCsv("date,resting_heart_rate\n2026-08-08,62", "My pet", {
+    today: "2026-08-08",
+  });
+  assert.equal(readings.length, 1);
+});
+
+test("a value outside the metric's declared range is refused", () => {
+  // 999 out of 100 is a broken export, and storing it drags that metric's
+  // baseline into nonsense while the chart quietly rescales around it.
+  const { readings, warnings } = parseCsv("date,sleep_score\n2026-08-01,999");
+  assert.equal(readings.length, 0);
+  assert.match(warnings[0].message, /outside the possible range \(0–100\)/);
+});
+
+test("range is checked in canonical units, after conversion", () => {
+  // A plausible imperial weight must not be rejected by a gram-denominated
+  // bound, nor an absurd one accepted because it looked small in pounds.
+  assert.equal(parseCsv("date,weight_lb\n2026-08-01,32").readings.length, 1);
+});

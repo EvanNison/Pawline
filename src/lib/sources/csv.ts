@@ -140,7 +140,11 @@ function resolveColumn(header: string): Column | string {
   return `unknown metric column "${header}"`;
 }
 
-export function parseCsv(text: string, defaultPetName = "My pet"): ParsedCsv {
+export function parseCsv(
+  text: string,
+  defaultPetName = "My pet",
+  opts: { today?: string } = {}
+): ParsedCsv {
   const warnings: ParseWarning[] = [];
   const readings: Reading[] = [];
   const pets = new Set<string>();
@@ -193,6 +197,19 @@ export function parseCsv(text: string, defaultPetName = "My pet"): ParsedCsv {
       warnings.push({ row: rowNo, message: `"${date}" is not a valid YYYY-MM-DD date — row skipped` });
       continue;
     }
+    // A reading cannot describe a day that has not happened. Accepting one was
+    // not merely untidy: a future date has a negative age, so the freshness
+    // check called it current, the history gate accepted it, and the dashboard
+    // showed a green "nothing unusual" built entirely from impossible data. A
+    // spreadsheet with a mis-parsed date column is the ordinary way this
+    // happens, not an attack.
+    if (opts.today && date > opts.today) {
+      warnings.push({
+        row: rowNo,
+        message: `"${date}" is in the future — row skipped (check the date format in your export)`,
+      });
+      continue;
+    }
     const petName = (petCol >= 0 ? cells[petCol] : "") || defaultPetName;
     pets.add(petName);
 
@@ -214,6 +231,24 @@ export function parseCsv(text: string, defaultPetName = "My pet"): ParsedCsv {
         warnings.push({ row: rowNo, message: `${col.metric}: ${n} is negative — skipped` });
         continue;
       }
+      // The registry declares what each measurement can physically be. A sleep
+      // score of 999 out of 100 is a broken export, and storing it drags the
+      // baseline for that metric into nonsense — quietly, because the chart
+      // just rescales around it. Checked AFTER unit conversion, so the bounds
+      // and the value are in the same units.
+      const converted = col.convert(n);
+      const def = metricDef(col.metric);
+      if (def) {
+        const low = def.min ?? -Infinity;
+        const high = def.max ?? Infinity;
+        if (converted < low || converted > high) {
+          warnings.push({
+            row: rowNo,
+            message: `${col.metric}: ${n} is outside the possible range (${low}–${high}) — skipped`,
+          });
+          continue;
+        }
+      }
       // Duplicate pet+date+metric would collide on the primary key. Warn rather
       // than let last-write-win decide silently.
       const dedupe = `${petName} ${date} ${col.metric}`;
@@ -222,7 +257,7 @@ export function parseCsv(text: string, defaultPetName = "My pet"): ParsedCsv {
         continue;
       }
       seen.add(dedupe);
-      readings.push({ petKey: petName, date, metric: col.metric, value: col.convert(n) });
+      readings.push({ petKey: petName, date, metric: col.metric, value: converted });
     }
   }
 
@@ -279,8 +314,8 @@ export class CsvSource implements Source {
   private readonly species: Species;
   private readonly timezone: string;
 
-  constructor(text: string, opts: { species?: Species; timezone: string; defaultPetName?: string }) {
-    this.parsed = parseCsv(text, opts.defaultPetName);
+  constructor(text: string, opts: { species?: Species; timezone: string; defaultPetName?: string; today?: string }) {
+    this.parsed = parseCsv(text, opts.defaultPetName, { today: opts.today });
     this.species = opts.species ?? "unknown";
     this.timezone = opts.timezone;
   }

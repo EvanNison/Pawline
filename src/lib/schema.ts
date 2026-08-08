@@ -69,6 +69,10 @@ export const MIGRATIONS: Migration[] = [
         direction         text not null,
         value             double precision,
         baseline_median   double precision,
+        -- Written on every alert and not currently read anywhere. Kept because
+        -- it is the figure that explains why a value counted as unusual, and
+        -- recovering it later is impossible; do not read its presence as
+        -- something the UI shows.
         baseline_spread   double precision,
         severity          text not null,
         -- How many days of the detection window were outside the band. Stored
@@ -86,6 +90,8 @@ export const MIGRATIONS: Migration[] = [
         -- The condition cleared but the alert has not been delivered yet: hide
         -- it, keep retrying it.
         resolved          boolean not null default false,
+        -- Set when an episode is withdrawn. Written and not yet read: the
+        -- alerts page shows resolution as a state, not a time.
         resolved_at       timestamptz,
         -- Delivery was given up on. Distinct from "emailed", which must only
         -- ever mean a message genuinely went out.

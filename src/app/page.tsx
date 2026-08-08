@@ -1,4 +1,5 @@
 import { requireSession } from "@/lib/session";
+import NotConfigured from "@/components/NotConfigured";
 import Link from "next/link";
 import { ensureSchema, sql } from "@/lib/db";
 import { readSettings } from "@/lib/settings";
@@ -14,15 +15,12 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   await requireSession();
+  // The same component every other page uses. A second, vaguer wording here
+  // ("see the README") sent the one person most likely to be stuck — someone
+  // on their first deploy, landing on the home page — somewhere less useful
+  // than the other three pages did.
   if (!process.env.DATABASE_URL && !process.env.POSTGRES_URL) {
-    return (
-      <main className="mx-auto max-w-2xl p-6">
-        <h1 className="text-xl font-bold sm:text-2xl">🐾 Pawline</h1>
-        <p className="mt-4 text-zinc-600 dark:text-zinc-400">
-          No database configured yet. See the setup guide in the README.
-        </p>
-      </main>
-    );
+    return <NotConfigured />;
   }
 
   await ensureSchema();

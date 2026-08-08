@@ -87,7 +87,11 @@ export default async function AlertsPage({
       count(distinct date)::int as days from daily_metrics where pet_id = ${pet.id}`;
 
   const counts = new Map<string, number>();
-  for (const r of rows) if (!r.acknowledged) counts.set(r.metric as string, (counts.get(r.metric as string) ?? 0) + 1);
+  // Every episode, including dismissed ones. Dismissing is explicitly not a
+  // delete — the record is what "flagged three times since June" is built on —
+  // so excluding acknowledged rows made the summary shrink each time the owner
+  // tidied up, which is the one thing the feature promised not to do.
+  for (const r of rows) counts.set(r.metric as string, (counts.get(r.metric as string) ?? 0) + 1);
   const label = (m: string) => metricDef(m)?.label ?? m;
   const show = (m: string, v: unknown) => {
     if (v === null || v === undefined) return "—";

@@ -10,8 +10,8 @@ export const dynamic = "force-dynamic";
  * Import a spreadsheet.
  *
  * The vendor-free way in, and what makes "works with any tracker" true rather
- * than merely intended. It is also why the export format matters: whatever put
- * data here can take it out again.
+ * than merely intended. An exporter to match it does not exist yet, and is
+ * listed as not-done rather than implied here.
  */
 export default async function ImportPage() {
   await requireSession();

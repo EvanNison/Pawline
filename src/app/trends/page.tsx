@@ -4,7 +4,13 @@ import NotConfigured from "@/components/NotConfigured";
 import { ensureSchema } from "@/lib/db";
 import { readSettings } from "@/lib/settings";
 import { listPets, readSeries } from "@/lib/store";
-import { availableMetrics, metric as metricDef, type Species } from "@/lib/metrics";
+import {
+  availableMetrics,
+  metric as metricDef,
+  MIN_WEAR_MINUTES,
+  WEAR_SENSITIVE,
+  type Species,
+} from "@/lib/metrics";
 import type { DayPoint } from "@/lib/baseline";
 import { buildYoY, rollingAvg, totalSleepSeries } from "@/lib/trends";
 import { toDisplay, unitLabel } from "@/lib/units";
@@ -82,14 +88,24 @@ export default async function TrendsPage({
     byMetric.get("day_sleep_minutes")
   );
 
+  // Days the tracker was barely worn undercount every elapsed-time total. The
+  // dashboard shades them and the vet report excludes them; this page averaged
+  // them in, so a fortnight of collar removal became a long-term decline in
+  // activity or sleep — on the page built specifically to reveal slow declines.
+  const lowWear = new Set(
+    (byMetric.get("wear_time") ?? []).filter((p) => p.value < MIN_WEAR_MINUTES).map((p) => p.date)
+  );
+  const usable = (key: string, series: DayPoint[]) =>
+    WEAR_SENSITIVE.has(key) ? series.filter((p) => !lowWear.has(p.date)) : series;
+
   const candidates: { key: string; label: string; unit: string; series: DayPoint[] }[] = [
     ...shown.map((m) => ({
       key: m.key,
       label: m.label,
       unit: unitLabel(m.dimension, settings.units),
-      series: byMetric.get(m.key) ?? [],
+      series: usable(m.key, byMetric.get(m.key) ?? []),
     })),
-    { key: "total_sleep_minutes", label: "Total Sleep", unit: "min", series: totalSleep },
+    { key: "total_sleep_minutes", label: "Total Sleep", unit: "min", series: usable("night_sleep_minutes", totalSleep) },
   ];
 
   const sections = candidates

@@ -56,14 +56,25 @@ export default async function StatusPage() {
     where ok = true order by started_at desc limit 1`;
   const [{ count: petCount }] = await s`select count(*)::int as count from pets`;
   const [creds] = await s`select value from app_config where key = 'source:tractive:credentials'`;
+  // Deliberately the same predicate as deliverPendingAlerts, with no extra
+  // filter. Excluding resolved rows here let Status say "nothing waiting to
+  // send" moments before the next run emailed exactly those rows — resolved
+  // but undelivered alerts are still sent, on purpose.
   const [{ count: undelivered }] = await s`select count(*)::int as count from alerts
-    where emailed = false and acknowledged = false and resolved = false and muted = false`;
+    where emailed = false and acknowledged = false and muted = false`;
   // Ask the notify layer itself rather than re-deriving the rule here: two
   // copies of "is email set up" would drift, and this page exists to be trusted.
   const channel = await emailChannel();
 
-  const freshRows = await s`select metric, max(date)::text as newest
-    from daily_metrics where metric not like 'raw.%' group by metric`;
+  // The LEAST fresh pet per metric, not the freshest. Grouping by metric alone
+  // took max(date) across every pet, so one current animal masked the same
+  // measurement having stopped for another — on the page whose whole job is to
+  // notice things stopping.
+  const freshRows = await s`select metric, min(newest)::text as newest from (
+      select pet_id, metric, max(date) as newest
+      from daily_metrics where metric not like 'raw.%'
+      group by pet_id, metric
+    ) per_pet group by metric`;
   const freshByMetric = new Map(freshRows.map((r) => [r.metric as string, r.newest as string | null]));
 
   const checks = buildStatus({

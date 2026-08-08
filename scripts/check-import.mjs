@@ -166,6 +166,22 @@ try {
     check("and its direction", raised[0].direction === "high", raised[0].direction);
   }
 
+  // Muting after an alert already exists must actually silence it, and
+  // unmuting must lift it. `muted` was copied only at insert, so the setting
+  // appeared to do nothing on an open episode -- or kept suppressing after
+  // being switched off.
+  await raiseAndWithdrawAlerts("csv:Alert", today, ["resting_heart_rate"]);
+  const [afterMute] = await admin.unsafe(
+    `select muted from ${SCHEMA}.alerts where pet_id = 'csv:Alert' and metric = 'resting_heart_rate'`
+  );
+  check("muting silences an alert that already exists", afterMute.muted === true, `muted = ${afterMute.muted}`);
+
+  await raiseAndWithdrawAlerts("csv:Alert", today, []);
+  const [afterUnmute] = await admin.unsafe(
+    `select muted from ${SCHEMA}.alerts where pet_id = 'csv:Alert' and metric = 'resting_heart_rate'`
+  );
+  check("unmuting lifts it again", afterUnmute.muted === false, `muted = ${afterUnmute.muted}`);
+
   // The gate that protects someone's subscription, proved against a real
   // database rather than a mock. Setting the enabled flag alone must not be
   // enough: without a recorded acknowledgement the source must stay dark.

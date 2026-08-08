@@ -44,9 +44,14 @@ export async function raiseAndWithdrawAlerts(petId: string, today: string, muted
           and acknowledged = false and resolved = false
         order by date asc limit 1`;
       if (open) {
+        // `muted` is refreshed too. Copying it only at insert meant muting a
+        // measurement never silenced an episode already open, and unmuting one
+        // never un-silenced it — the setting appeared to do nothing, or
+        // silently kept suppressing after being turned off.
         await s`update alerts set direction = ${dev.direction}, value = ${dev.value},
             baseline_median = ${dev.baseline.median}, baseline_spread = ${dev.baseline.smad},
-            severity = ${dev.severity}, days_outside = ${dev.daysOutside}
+            severity = ${dev.severity}, days_outside = ${dev.daysOutside},
+            muted = ${muted.includes(def.key)}
           where id = ${Number(open.id)}`;
       } else {
         await s`insert into alerts

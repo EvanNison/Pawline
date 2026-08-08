@@ -3,11 +3,11 @@
 **Long-term health trends and baseline alerts for pet activity trackers.**
 
 Most pet trackers show you the last 7 days. That's enough to answer "how was
-yesterday?" and useless for "has anything been slowly changing since spring?" —
-which is the question that actually finds problems early.
+yesterday?" and useless for "has anything been slowly changing since spring?"
 
 Pawline keeps your pet's data **forever**, learns what's normal *for your pet*,
-and tells you when something drifts away from it.
+and tells you when something drifts away from it. Whether that turns out to
+matter is a question for your vet — this only tells you something changed.
 
 > **This is not a veterinary device.** It spots changes in numbers. It cannot
 > diagnose anything. A calm dashboard is not evidence your pet is well, and an

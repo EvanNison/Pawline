@@ -113,7 +113,11 @@ export default async function StatusPage() {
   );
 
   const level = overallLevel(checks);
-  const recent = await s`select started_at, finished_at, ok, trigger, days_written, error
+  // `kind`, not `trigger`: the column is named kind in schema.ts and written as
+  // kind by startRun. This page was the only place that disagreed, and because
+  // it is the page you open when something looks wrong, it failed exactly when
+  // it was needed.
+  const recent = await s`select started_at, finished_at, ok, kind, days_written, error
     from runs order by started_at desc limit 10`;
 
   const group = (ids: (c: Check) => boolean) => checks.filter(ids);
@@ -193,7 +197,7 @@ export default async function StatusPage() {
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-zinc-500">
-                    {String(r.trigger)} · {String(r.days_written)} day
+                    {String(r.kind)} · {String(r.days_written)} day
                     {Number(r.days_written) === 1 ? "" : "s"} written
                   </p>
                   {r.error ? <p className="mt-1 text-xs">{String(r.error).slice(0, 160)}</p> : null}
@@ -222,7 +226,7 @@ export default async function StatusPage() {
                             ? "ok"
                             : `failed — ${String(r.error ?? "unknown").slice(0, 80)}`}
                       </td>
-                      <td>{String(r.trigger)}</td>
+                      <td>{String(r.kind)}</td>
                       <td>{String(r.days_written)}</td>
                     </tr>
                   ))}

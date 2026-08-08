@@ -94,19 +94,19 @@ export async function upgradeStoredSecrets(
   if (!encryptionKey()) return { upgraded: [] };
   const upgraded: string[] = [];
 
-  const [cred] = await s`select password from app_credentials where id = 1`;
-  if (cred && needsUpgrade(String(cred.password))) {
-    await s`update app_credentials set password = ${await protect(String(cred.password))} where id = 1`;
-    upgraded.push("tractive_password");
-  }
+  // Every secret lives in app_config. Source logins are found by pattern rather
+  // than listed, so a second source's credentials are covered the day it is
+  // added — a list would silently leave them in the clear.
+  const rows = await s`select key, value from app_config
+    where key like 'source:%:credentials' or key in ('gmail_app_password', 'resend_api_key')`;
 
-  for (const key of ["gmail_app_password", "resend_api_key"]) {
-    const [row] = await s`select value from app_config where key = ${key}`;
-    if (row && needsUpgrade(String(row.value))) {
-      await s`update app_config set value = ${await protect(String(row.value))}, updated_at = now()
-        where key = ${key}`;
-      upgraded.push(key);
-    }
+  for (const row of rows) {
+    const key = String(row.key);
+    const value = String(row.value);
+    if (!needsUpgrade(value)) continue;
+    await s`update app_config set value = ${await protect(value)}, updated_at = now()
+      where key = ${key}`;
+    upgraded.push(key);
   }
   return { upgraded };
 }

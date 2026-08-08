@@ -8,6 +8,7 @@ import { availableMetrics, MIN_WEAR_MINUTES, WEAR_SENSITIVE, type Species } from
 import { ACCRUING, alertSeries, isAlertVisible } from "@/lib/alerting";
 import { hasSufficientHistory } from "@/lib/baseline";
 import { buildChart } from "@/lib/chart";
+import { assessability, STALE_AFTER_DAYS } from "@/lib/health";
 import { localDate, addDays } from "@/lib/time";
 import TrendChart from "@/components/TrendChart";
 
@@ -76,11 +77,29 @@ export default async function Home() {
     );
 
   const alertable = shown.filter((m) => m.alert);
-  const assessable = alertable.filter((m) =>
-    hasSufficientHistory(
-      alertSeries(seriesByMetric.get(m.key) ?? [], m.key, { today, lowWear: lowWearDates })
-    )
-  ).length;
+
+  /**
+   * A metric counts as assessable only if it has enough history AND a recent
+   * reading.
+   *
+   * Depth alone was the bug: a baseline built from months of data stays
+   * confident forever, so a collector that died in March would still have
+   * produced a green "nothing unusual" tick in August. That is the precise
+   * failure this project claims to prevent — the one that looks like health.
+   */
+  const { assessable, building, stale } = assessability(
+    alertable.map((m) => {
+      const series = alertSeries(seriesByMetric.get(m.key) ?? [], m.key, {
+        today,
+        lowWear: lowWearDates,
+      });
+      return {
+        hasHistory: hasSufficientHistory(series),
+        newest: series.filter((p) => p.value !== null).at(-1)?.date ?? null,
+      };
+    }),
+    today
+  );
 
   const alertRows = await s`select id, date::text as date, metric, direction, value,
       baseline_median, severity, acknowledged, emailed, resolved, note, muted
@@ -112,7 +131,17 @@ export default async function Home() {
       </header>
 
       {visible.length === 0 ? (
-        assessable === 0 ? (
+        stale > 0 ? (
+          // Ranked above the green tick deliberately: stale data is the failure
+          // that looks like health, so it must not be reported underneath a
+          // reassuring headline.
+          <section className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
+            ⚠️ {stale} measurement{stale === 1 ? " has" : "s have"} stopped arriving — nothing
+            new for more than {STALE_AFTER_DAYS} days. Nothing can be judged from readings
+            that are not coming in, so this is <strong>not</strong> a statement that
+            everything is normal. See <Link href="/status" className="underline">Status</Link>.
+          </section>
+        ) : assessable === 0 ? (
           <section className="rounded-xl border border-zinc-300 bg-zinc-50 p-4 text-sm dark:border-zinc-700 dark:bg-zinc-900">
             ⏳ Not enough history to judge anything yet — a baseline needs about three
             weeks of readings per measurement. This is not a statement that everything
@@ -121,8 +150,8 @@ export default async function Home() {
         ) : (
           <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
             ✅ Nothing unusual in the {assessable} measurement{assessable === 1 ? "" : "s"} with
-            enough history to assess
-            {alertable.length > assessable && <> ({alertable.length - assessable} still building up history)</>}.
+            enough history to assess, all current to the last {STALE_AFTER_DAYS} days
+            {building > 0 && <> ({building} still building up history)</>}.
           </section>
         )
       ) : (

@@ -7,7 +7,14 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildStatus, headline, overallLevel, type Check, type StatusInput } from "../health";
+import {
+  assessability,
+  buildStatus,
+  headline,
+  overallLevel,
+  type Check,
+  type StatusInput,
+} from "../health";
 
 const NOW = new Date("2026-08-20T12:00:00Z");
 const TODAY = "2026-08-20";
@@ -160,4 +167,43 @@ test("every check carries an actionable line, not just a colour", () => {
     assert.ok(c.detail.trim().length > 0, `${c.id} has no explanation`);
     assert.ok(c.label.trim().length > 0);
   }
+});
+
+// The failure this whole project exists to prevent: a dead collector still
+// showing a green tick, because the baseline has months of history behind it.
+test("a metric with deep history but no recent readings is stale, not assessable", () => {
+  const r = assessability([{ hasHistory: true, newest: "2026-01-01" }], "2026-08-07");
+  assert.deepEqual(r, { assessable: 0, building: 0, stale: 1 });
+});
+
+test("a metric that has never reported is stale, not assessable", () => {
+  const r = assessability([{ hasHistory: true, newest: null }], "2026-08-07");
+  assert.equal(r.stale, 1);
+  assert.equal(r.assessable, 0);
+});
+
+test("current and deep is the only combination that counts as assessable", () => {
+  const r = assessability([{ hasHistory: true, newest: "2026-08-06" }], "2026-08-07");
+  assert.deepEqual(r, { assessable: 1, building: 0, stale: 0 });
+});
+
+test("still building history is distinguished from having gone quiet", () => {
+  // They need different words on the dashboard: one is "wait", the other is
+  // "something is broken". Collapsing them is how a fault reads as patience.
+  const r = assessability(
+    [
+      { hasHistory: false, newest: "2026-08-07" },
+      { hasHistory: true, newest: "2026-05-01" },
+      { hasHistory: true, newest: "2026-08-07" },
+    ],
+    "2026-08-07"
+  );
+  assert.deepEqual(r, { assessable: 1, building: 1, stale: 1 });
+});
+
+test("the staleness boundary is inclusive of the threshold day", () => {
+  const at = assessability([{ hasHistory: true, newest: "2026-08-04" }], "2026-08-07");
+  assert.equal(at.assessable, 1, "exactly 3 days old is still current");
+  const past = assessability([{ hasHistory: true, newest: "2026-08-03" }], "2026-08-07");
+  assert.equal(past.stale, 1, "4 days old is stale");
 });

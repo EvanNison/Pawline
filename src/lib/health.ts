@@ -173,6 +173,36 @@ function metricChecks(input: StatusInput): Check[] {
   });
 }
 
+/** How stale a metric may be and still be treated as currently assessable. */
+export const STALE_AFTER_DAYS = 3;
+
+/**
+ * Split alertable metrics into what can be judged, what is still warming up,
+ * and what has gone quiet.
+ *
+ * Lives here rather than in the dashboard because the dashboard is unreachable
+ * by tests, and this decides whether a green tick is shown. Depth of history
+ * alone was the original rule, which meant a baseline built from months of data
+ * stayed confident forever: a collector that died in March still produced
+ * "nothing unusual" in August. Freshness is therefore a condition of being
+ * assessable, not a separate warning bolted alongside it.
+ */
+export function assessability(
+  metrics: { hasHistory: boolean; newest: string | null }[],
+  today: string,
+  staleAfterDays: number = STALE_AFTER_DAYS
+): { assessable: number; building: number; stale: number } {
+  let assessable = 0;
+  let building = 0;
+  let stale = 0;
+  for (const m of metrics) {
+    if (!m.hasHistory) building++;
+    else if (!m.newest || daysBetween(m.newest, today) > staleAfterDays) stale++;
+    else assessable++;
+  }
+  return { assessable, building, stale };
+}
+
 /** What the owner would call the route, not what the code calls it. */
 function routeName(channel: Channel): string {
   return channel === "gmail" ? "Gmail" : channel === "resend" ? "Resend" : "no route";

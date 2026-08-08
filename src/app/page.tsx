@@ -16,7 +16,11 @@ import { unitLabel } from "@/lib/units";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ pet?: string }>;
+}) {
   await requireSession();
   // The same component every other page uses. A second, vaguer wording here
   // ("see the README") sent the one person most likely to be stuck — someone
@@ -51,7 +55,12 @@ export default async function Home() {
     );
   }
 
-  const pet = pets[0];
+  // Selectable, not just pets[0]. With two animals the dashboard showed
+  // whichever sorted first and offered no way to reach the other, so an alert
+  // raised for the second pet was invisible here and on /alerts -- present in
+  // the database, correctly emailed, and unreachable in the interface.
+  const params = await searchParams;
+  const pet = pets.find((p) => p.id === params.pet) ?? pets[0];
   const today = localDate(pet.timezone);
   const species = pet.species as Species;
 
@@ -133,7 +142,19 @@ export default async function Home() {
           <p className="text-xs text-zinc-500">Long-term health trends · {settings.units} units</p>
         </div>
         <nav className="flex flex-wrap gap-1.5 text-sm">
-          <Link href="/alerts" className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">🔔 Alerts</Link>
+          {pets.length > 1 &&
+            pets.map((p) => (
+              <Link
+                key={p.id}
+                href={`/?pet=${encodeURIComponent(p.id)}`}
+                className={`rounded-md px-2 py-1 ${
+                  p.id === pet.id ? "bg-indigo-600 text-white" : "bg-zinc-100 dark:bg-zinc-800"
+                }`}
+              >
+                {p.name}
+              </Link>
+            ))}
+          <Link href={`/alerts?pet=${encodeURIComponent(pet.id)}`} className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">🔔 Alerts</Link>
           <Link href="/status" className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">🩹 Status</Link>
           <Link href="/trends" className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">📈 Trends</Link>
           <Link href="/report" className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">🩺 Vet report</Link>

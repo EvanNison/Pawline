@@ -154,8 +154,20 @@ export default async function ReportPage({
             recorded daily
           </p>
         </div>
-        <div className="flex gap-2 print:hidden">
-          <Link href="/" className="rounded-md bg-zinc-100 px-2 py-1.5 text-sm dark:bg-zinc-800">← Dashboard</Link>
+        <div className="flex flex-wrap gap-1.5 print:hidden">
+          {pets.length > 1 &&
+            pets.map((p) => (
+              <Link
+                key={p.id}
+                href={`/report?pet=${encodeURIComponent(p.id)}`}
+                className={`rounded-md px-2 py-1.5 text-sm ${
+                  p.id === pet.id ? "bg-indigo-600 text-white" : "bg-zinc-100 dark:bg-zinc-800"
+                }`}
+              >
+                {p.name}
+              </Link>
+            ))}
+          <Link href={`/?pet=${encodeURIComponent(pet.id)}`} className="rounded-md bg-zinc-100 px-2 py-1.5 text-sm dark:bg-zinc-800">← Dashboard</Link>
           <PrintButton />
         </div>
       </header>

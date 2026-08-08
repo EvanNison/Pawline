@@ -18,7 +18,11 @@ function statusOf(a: { acknowledged: boolean; resolved: boolean; emailed: boolea
   return { word: "active", tone: "text-red-700 dark:text-red-300" };
 }
 
-export default async function AlertsPage() {
+export default async function AlertsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ pet?: string }>;
+}) {
   await requireSession();
   if (!process.env.DATABASE_URL && !process.env.POSTGRES_URL) return <NotConfigured />;
   try {
@@ -42,7 +46,10 @@ export default async function AlertsPage() {
       </main>
     );
   }
-  const pet = pets[0];
+  // Same reason as the dashboard: an alert raised for the second pet was
+  // unreachable, which for an alerts page is the whole job undone.
+  const params = await searchParams;
+  const pet = pets.find((p) => p.id === params.pet) ?? pets[0];
   const today = localDate(pet.timezone);
 
   const rows = await s`select date::text as date, metric, direction, value, baseline_median,
@@ -72,8 +79,20 @@ export default async function AlertsPage() {
           <h1 className="text-xl font-bold sm:text-2xl">🔔 Everything that has been flagged</h1>
           <p className="text-sm text-zinc-500">{pet.name} · including items that later returned to normal</p>
         </div>
-        <nav className="flex gap-2 text-sm print:hidden">
-          <Link href="/" className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">← Dashboard</Link>
+        <nav className="flex flex-wrap gap-1.5 text-sm print:hidden">
+          {pets.length > 1 &&
+            pets.map((p) => (
+              <Link
+                key={p.id}
+                href={`/alerts?pet=${encodeURIComponent(p.id)}`}
+                className={`rounded-md px-2 py-1 ${
+                  p.id === pet.id ? "bg-indigo-600 text-white" : "bg-zinc-100 dark:bg-zinc-800"
+                }`}
+              >
+                {p.name}
+              </Link>
+            ))}
+          <Link href={`/?pet=${encodeURIComponent(pet.id)}`} className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">← Dashboard</Link>
           <Link href="/status" className="rounded-md bg-zinc-100 px-2 py-1 dark:bg-zinc-800">🩹 Status</Link>
         </nav>
       </header>

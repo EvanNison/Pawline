@@ -9,14 +9,10 @@
  * Everything runs in a throwaway namespace and is dropped afterwards.
  */
 import postgres from "postgres";
-import { readFileSync } from "fs";
-import { fileURLToPath } from "url";
+import { databaseUrl } from "./db-url.mjs";
 
 const SCHEMA = "pawline_importcheck";
-const base = readFileSync(fileURLToPath(new URL(".env.local", import.meta.url)), "utf8")
-  .match(/^DATABASE_URL=(.+)$/m)[1]
-  .trim()
-  .replace(/^["']|["']$/g, "");
+const base = databaseUrl();
 
 const admin = postgres(base, { ssl: "require", max: 1, onnotice: () => {} });
 let failed = 0;

@@ -21,6 +21,7 @@ import postgres from "postgres";
 import { readFileSync, readdirSync, statSync } from "fs";
 import { join } from "path";
 import { fileURLToPath } from "url";
+import { databaseUrl } from "./db-url.mjs";
 
 const SCHEMA = "pawline_sqlcheck";
 
@@ -84,10 +85,7 @@ function extractQueries(src, file) {
   return found;
 }
 
-const url = readFileSync(fileURLToPath(new URL(".env.local", import.meta.url)), "utf8")
-  .match(/^DATABASE_URL=(.+)$/m)[1]
-  .trim()
-  .replace(/^["']|["']$/g, "");
+const url = databaseUrl();
 const sql = postgres(url, { ssl: "require", max: 1, connect_timeout: 45, onnotice: () => {} });
 
 let checked = 0;

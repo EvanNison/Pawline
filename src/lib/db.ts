@@ -33,44 +33,60 @@ let migrated = false;
  */
 export async function ensureSchema(): Promise<void> {
   if (migrated) return;
-  const s = sql();
-  await s`create table if not exists schema_version (
-    id int primary key default 1,
-    version int not null default 0,
-    updated_at timestamptz not null default now()
-  )`;
-  await s`insert into schema_version (id, version) values (1, 0) on conflict (id) do nothing`;
 
-  // A Postgres advisory lock, so two instances starting at once cannot both
-  // decide the same migration is pending and apply it twice. A future data
-  // migration applied twice would corrupt values rather than merely fail.
+  // Everything below must run on ONE connection, so the pool is bypassed with a
+  // reserved one. This is load-bearing, not tidiness: `pg_advisory_lock` is
+  // scoped to a session, and `begin`/`commit` are session state. Issued through
+  // a pool of 3 they can each land on a different connection — so the lock
+  // guards a session that is not the one migrating, `commit` may reach a
+  // connection that never began, and `pg_advisory_unlock` can be sent to a
+  // session that holds nothing while the real holder keeps the lock until it is
+  // recycled. The atomic migrations and the mutual exclusion were both
+  // nominally present and neither actually held.
+  const reserved = await sql().reserve();
   const LOCK = 0x7061776c; // "pawl"
-  await s`select pg_advisory_lock(${LOCK})`;
   try {
-    const runner: SqlRunner = {
-      async exec(statement) {
-        await s.unsafe(statement);
-      },
-      async currentVersion() {
-        const [row] = await s`select version from schema_version where id = 1`;
-        return Number(row?.version ?? 0);
-      },
-      async setVersion(version) {
-        await s`update schema_version set version = ${version}, updated_at = now() where id = 1`;
-      },
-      async begin() {
-        await s.unsafe("begin");
-      },
-      async commit() {
-        await s.unsafe("commit");
-      },
-      async rollback() {
-        await s.unsafe("rollback");
-      },
-    };
-    await runMigrations(runner);
+    // Taken before the bootstrap DDL so that two instances starting together
+    // serialise here rather than racing `create table if not exists`, which can
+    // still collide in the catalog.
+    await reserved`select pg_advisory_lock(${LOCK})`;
+    try {
+      await reserved`create table if not exists schema_version (
+        id int primary key default 1,
+        version int not null default 0,
+        updated_at timestamptz not null default now()
+      )`;
+      await reserved`insert into schema_version (id, version) values (1, 0) on conflict (id) do nothing`;
+
+      const runner: SqlRunner = {
+        async exec(statement) {
+          await reserved.unsafe(statement);
+        },
+        async currentVersion() {
+          const [row] = await reserved`select version from schema_version where id = 1`;
+          return Number(row?.version ?? 0);
+        },
+        async setVersion(version) {
+          await reserved`update schema_version set version = ${version}, updated_at = now() where id = 1`;
+        },
+        async begin() {
+          await reserved.unsafe("begin");
+        },
+        async commit() {
+          await reserved.unsafe("commit");
+        },
+        async rollback() {
+          await reserved.unsafe("rollback");
+        },
+      };
+      await runMigrations(runner);
+    } finally {
+      await reserved`select pg_advisory_unlock(${LOCK})`;
+    }
   } finally {
-    await s`select pg_advisory_unlock(${LOCK})`;
+    // Must happen even if unlocking threw, or the connection leaks out of the
+    // pool and the next deploy starts one connection poorer, permanently.
+    reserved.release();
   }
   migrated = true;
 }

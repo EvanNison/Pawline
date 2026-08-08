@@ -67,7 +67,10 @@ export const MIGRATIONS: Migration[] = [
         -- How many days of the detection window were outside the band. Stored
         -- so a retried email can state the real figure rather than guessing.
         days_outside      int,
-        -- Absolute-threshold alerts carry their explanation as text.
+        -- An explanation in words, for alerts a band cannot describe -- an
+        -- absolute threshold, or a collection fault reported as an alert.
+        -- NOTHING WRITES THIS YET. Every reader falls back to the generated
+        -- wording, so an empty column is correct rather than a missing value.
         note              text,
         -- The user dismissed it.
         acknowledged      boolean not null default false,

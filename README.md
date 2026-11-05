@@ -33,6 +33,22 @@ Nothing is judged until there are 21 days of history. A green status also
 requires recent readings, so if collection stops the dashboard says so instead
 of staying green.
 
+On top of the single-metric alerts (never instead of them), the dashboard
+judges readings together:
+
+- **Vitals check**: heart rate, breathing, night wake-ups and activity on the
+  same day. One reading off is common; two or more off together, or heart rate
+  and breathing both up, is the pattern worth taking more seriously.
+- **Readiness**: a 0 to 100 score for how normal the body looks against the
+  pet's own usual. Most days score 90+.
+- **Itch & comfort**: scratching and restless nights together.
+- **Long-term heart & breathing**: the slow drift that day-to-day alerts are
+  built not to see, comparing the last three months with a year earlier.
+
+Hover, or tap and drag on a phone, to see any day's numbers, and switch the
+view between two weeks and a year. Journal notes show up alongside, so a trip
+or a sitter stay is right there next to the readings it explains.
+
 Other things it does:
 
 - A printable vet report with year-over-year averages, the day count behind each
@@ -110,13 +126,14 @@ Not there yet:
 
 ```bash
 npm install
-npm test              # 231 tests, no database needed
+npm test              # 246 tests, no database needed
 npm run typecheck
 npm run dev
 ```
 
-Two checks need a real Postgres in `DATABASE_URL`. TLS is required, so a free
-Neon database is the easy option. Both build a throwaway schema and drop it
+Two checks need a real Postgres in `DATABASE_URL`. TLS is required for any
+remote host, so a free Neon database is the easy option; a Postgres on
+`localhost` works too. Both build a throwaway schema and drop it
 afterwards:
 
 ```bash

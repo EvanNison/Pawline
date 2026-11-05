@@ -40,7 +40,7 @@ export default function QuickLog({ petId, weightUnit }: { petId: string; weightU
         {feedback(weightResult)}
       </form>
 
-      <form action={noteAction} className="flex flex-1 items-end gap-2">
+      <form action={noteAction} className="flex min-w-0 flex-1 flex-wrap items-end gap-2">
         <input type="hidden" name="pet_id" value={petId} />
         <label className="text-xs text-zinc-500">
           Note
@@ -55,7 +55,7 @@ export default function QuickLog({ petId, weightUnit }: { petId: string; weightU
         <input
           name="note"
           placeholder="e.g. started new food, limping after the park…"
-          className={`${input} min-w-40 flex-1`}
+          className={`${input} min-w-0 flex-1 basis-40`}
         />
         <button disabled={notePending} className={button}>
           {notePending ? "Adding…" : "Add"}

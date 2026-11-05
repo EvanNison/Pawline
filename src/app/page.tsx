@@ -12,6 +12,18 @@ import { assessability, STALE_AFTER_DAYS } from "@/lib/health";
 import { localDate, addDays } from "@/lib/time";
 import TrendChart from "@/components/TrendChart";
 import QuickLog from "@/components/QuickLog";
+import HealthSummary from "@/components/HealthSummary";
+import {
+  SUMMARY_RANGES,
+  vitalsOn,
+  comfortOn,
+  readinessOn,
+  flaggedStreak,
+  longTrend,
+  monthlyMedians,
+  contextFor,
+  type JournalEntry as CompositeJournalEntry,
+} from "@/lib/composites";
 import { unitLabel } from "@/lib/units";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +31,7 @@ export const dynamic = "force-dynamic";
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ pet?: string }>;
+  searchParams: Promise<{ pet?: string; sr?: string }>;
 }) {
   await requireSession();
   // The same component every other page uses. A second, vaguer wording here
@@ -118,6 +130,36 @@ export default async function Home({
   );
 
   const notes = await readJournal(pet.id, 8);
+
+  // ---- "Readings judged together" cards. In addition to every single-metric
+  // alert and chart, never instead of them. Same filtering as alerting, so a
+  // low-wear day or today's unfinished total never counts.
+  const summaryRange = SUMMARY_RANGES.some(([r]) => r === Number(params.sr)) ? Number(params.sr) : 14;
+  const alertMap = new Map(
+    alertable.map((m) => [
+      m.key,
+      alertSeries(seriesByMetric.get(m.key) ?? [], m.key, { today, lowWear: lowWearDates }),
+    ])
+  );
+  // Complete days only (today is still accruing), oldest first.
+  const stripDays = Array.from({ length: summaryRange }, (_, i) => addDays(today, i - summaryRange));
+  const vitalsDays = stripDays.map((d) => vitalsOn(alertMap, d));
+  const comfortDays = stripDays.map((d) => comfortOn(alertMap, d));
+  const readinessDays = stripDays.map((d) => readinessOn(alertMap, d));
+  const longTerm = (["resting_respiratory_rate", "resting_heart_rate"] as const)
+    .filter((k) => seriesByMetric.has(k))
+    .map((k) => ({
+      label: k === "resting_respiratory_rate" ? "Resting breathing" : "Resting heart rate",
+      unit: k === "resting_respiratory_rate" ? "breaths/min" : "bpm",
+      trend: longTrend(seriesByMetric.get(k), today),
+      months: monthlyMedians(seriesByMetric.get(k)),
+    }));
+  const contextEntries: CompositeJournalEntry[] = (
+    await readJournal(pet.id, 500, addDays(stripDays[0], -3))
+  ).map((e) => ({ date: e.date, category: e.category, note: e.note }));
+  contextEntries.sort((a, b) => a.date.localeCompare(b.date));
+  const hasContext = stripDays.map((d) => contextFor(contextEntries, d).length > 0);
+  const context = contextEntries.filter((e) => stripDays.some((d) => contextFor([e], d).length > 0));
 
   const alertRows = await s`select id, date::text as date, metric, direction, value,
       baseline_median, severity, acknowledged, emailed, resolved, note, muted
@@ -220,6 +262,19 @@ export default async function Home({
           cannot record, put where someone will actually see them rather than on
           a settings page they visit once. */}
       <QuickLog petId={pet.id} weightUnit={unitLabel("mass", settings.units)} />
+
+      <HealthSummary
+        petId={pet.id}
+        summaryRange={summaryRange}
+        days={stripDays}
+        hasContext={hasContext}
+        vitals={vitalsDays}
+        vitalsStreak={flaggedStreak(vitalsDays)}
+        readiness={readinessDays}
+        comfort={comfortDays}
+        longTerm={longTerm}
+        context={context}
+      />
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {charts.map((c) => (

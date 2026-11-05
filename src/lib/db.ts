@@ -17,7 +17,17 @@ export function sql() {
   if (!global.__pawlineSql) {
     const url = process.env.DATABASE_URL || process.env.POSTGRES_URL;
     if (!url) throw new Error("DATABASE_URL is not set");
-    global.__pawlineSql = postgres(url, { ssl: "require", max: 3 });
+    // TLS is required for any real host. A database on this same machine (local
+    // development) is the one case where there is no network to protect.
+    const host = (() => {
+      try {
+        return new URL(url).hostname;
+      } catch {
+        return "";
+      }
+    })();
+    const local = host === "localhost" || host === "127.0.0.1" || host === "::1";
+    global.__pawlineSql = postgres(url, { ssl: local ? false : "require", max: 3 });
   }
   return global.__pawlineSql;
 }

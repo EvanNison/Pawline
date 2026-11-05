@@ -14,7 +14,15 @@ import { databaseUrl } from "./db-url.mjs";
 const SCHEMA = "pawline_importcheck";
 const base = databaseUrl();
 
-const admin = postgres(base, { ssl: "require", max: 1, onnotice: () => {} });
+// TLS for any real host; a database on this same machine has no network to protect.
+const tlsFor = (u) => {
+  try {
+    return ["localhost", "127.0.0.1", "::1"].includes(new URL(u).hostname) ? false : "require";
+  } catch {
+    return "require";
+  }
+};
+const admin = postgres(base, { ssl: tlsFor(base), max: 1, onnotice: () => {} });
 let failed = 0;
 const check = (name, cond, detail = "") => {
   if (cond) console.log(`  PASS  ${name}`);

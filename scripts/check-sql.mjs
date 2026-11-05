@@ -88,7 +88,15 @@ function extractQueries(src, file) {
 }
 
 const url = databaseUrl();
-const sql = postgres(url, { ssl: "require", max: 1, connect_timeout: 45, onnotice: () => {} });
+// TLS for any real host; a database on this same machine has no network to protect.
+const tlsFor = (u) => {
+  try {
+    return ["localhost", "127.0.0.1", "::1"].includes(new URL(u).hostname) ? false : "require";
+  } catch {
+    return "require";
+  }
+};
+const sql = postgres(url, { ssl: tlsFor(url), max: 1, connect_timeout: 45, onnotice: () => {} });
 
 let checked = 0;
 const failures = [];
